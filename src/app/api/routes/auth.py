@@ -100,7 +100,7 @@ async def logout_user(Authorization: str = Header(...)):
             raise HTTPException(status_code=400, detail="Invalid token: no expiry")
         ttl = int(exp - datetime.utcnow().timestamp())
         if ttl > 0:
-            await redis_cache.redis_client.setex(f"blacklist:{token}", ttl, "1")
+            redis_cache.redis_client.setex(f"blacklist:{token}", ttl, "1")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token already expired")
     except jwt.InvalidTokenError:
