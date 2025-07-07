@@ -1,0 +1,30 @@
+[project]
+name = "aurasense-backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "argon2-cffi>=25.1.0",
+    "argon2-cffi-bindings>=21.2.0",
+    "cffi>=1.17.1",
+    "fastapi>=0.115.14",
+    "graphiti-core>=0.15.0",
+    "jose>=1.0.0",
+    "langchain>=0.3.26",
+    "langchain-core>=0.3.68",
+    "langchain-experimental>=0.3.4",
+    "langchain-groq>=0.3.5",
+    "langgraph>=0.5.1",
+    "neo4j>=5.28.1",
+    "neomodel>=5.5.0",
+    "passlib[bcrypt]>=1.7.4",
+    "pycparser>=2.22",
+    "pydantic[email]>=2.11.7",
+    "pyjwt>=2.10.1",
+    "python-decouple>=3.8",
+    "python-multipart>=0.0.20",
+    "redis>=6.2.0",
+    "scalar-fastapi>=1.0.3",
+    "uvicorn>=0.35.0",
+]
