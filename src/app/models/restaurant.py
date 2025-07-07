@@ -10,6 +10,7 @@ import uuid
 
 # --- Graph Node and Relationship Models (from schema.py) ---
 from neomodel import (
+    config,
     StructuredNode,
     StringProperty,
     IntegerProperty,
@@ -23,13 +24,9 @@ from neomodel import (
 )
 from datetime import datetime
 # Import shared relationship models from user.py
-from app.models.user import LikesRel, DislikesRel, RatingRel, VisitedRel
-
-class SimilarityRel(StructuredRel):
-    similarity_score: float | None = FloatProperty()
-    similarity_reasons: list[str] | None = ArrayProperty(StringProperty())
-    calculated_at: datetime = DateTimeProperty(default_now=True)
-
+from src.app.models.relationships import RatingRel, SimilarityRel, LikesRel, DislikesRel, VisitedRel
+from src.app.core.config import settings
+config.DATABASE_URL = settings.DATABASE_URL
 class Restaurant(StructuredNode):
     restaurant_id: str = UniqueIdProperty()
     name: str = StringProperty(required=True, index=True)

@@ -35,9 +35,9 @@ class LoginRequest(BaseModel):
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(request: RegisterRequest):
     # Check if user exists
-    if User.nodes.filter(email=request.email).first():
+    if User.nodes.filter(email=request.email).all():
         raise HTTPException(status_code=400, detail="Email already registered")
-    if request.username and User.nodes.filter(username=request.username).first():
+    if request.username and User.nodes.filter(username=request.username).all():
         raise HTTPException(status_code=400, detail="Username already taken")
     # Hash password
     password_hash = security_manager.hash_password(request.password)

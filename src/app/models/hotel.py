@@ -10,6 +10,7 @@ import uuid
 
 # --- Graph Node and Relationship Models (from schema.py) ---
 from neomodel import (
+    config,
     StructuredNode,
     StringProperty,
     IntegerProperty,
@@ -21,8 +22,9 @@ from neomodel import (
     RelationshipTo,
 )
 # Import shared relationship models from user.py
-from app.models.user import RatingRel, StayedRel
-
+from src.app.models.relationships import StayedRel, RatingRel
+from src.app.core.config import settings
+config.DATABASE_URL = settings.DATABASE_URL
 
 class Hotel(StructuredNode):
     """Hotel data model"""

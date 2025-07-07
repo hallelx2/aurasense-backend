@@ -4,6 +4,7 @@ Graph node and relationship model for menu items (neomodel)
 """
 
 from neomodel import (
+    config,
     StructuredNode,
     StructuredRel,
     StringProperty,
@@ -15,13 +16,9 @@ from neomodel import (
     IntegerProperty,
 )
 from datetime import datetime
-
-class OrderItemRel(StructuredRel):
-    quantity: int = IntegerProperty(default=1)
-    unit_price: float | None = FloatProperty()
-    special_instructions: str | None = StringProperty()
-    satisfaction_rating: float | None = FloatProperty()
-
+from src.app.models.relationships import OrderItemRel
+from src.app.core.config import settings
+config.DATABASE_URL = settings.DATABASE_URL
 class MenuItem(StructuredNode):
     name: str = StringProperty(required=True)
     description: str | None = StringProperty()

@@ -36,7 +36,7 @@ class Neo4jDatabase:
     async def close(self):
         """Close database connection"""
         if self.driver:
-            await self.driver.close()
+            self.driver.close()
             self.logger.info("Neo4j connection closed")
 
     async def execute_query(self, query: str, parameters: dict = None):
@@ -69,13 +69,12 @@ class RedisCache:
     async def close(self):
         """Close Redis connection"""
         if self.redis_client:
-            await self.redis_client.close()
+            self.redis_client.close()
             self.logger.info("Redis connection closed")
 
     async def set(self, key: str, value: str, ttl: int = None):
         """Set key-value pair in Redis"""
-        # Implementation will be added
-        pass
+        self.redis_client.set(key, value, ex=ttl)
 
     async def get(self, key: str):
         """Get value from Redis"""

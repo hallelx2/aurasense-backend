@@ -22,9 +22,12 @@ class Settings:
     ENVIRONMENT = config("ENVIRONMENT", default="development")
 
     # Database Settings
-    NEO4J_URI = config("NEO4J_URI", default="bolt://localhost:7687")
+    NEO4J_HOST = config("NEO4J_HOST", default="localhost")
+    NEO4J_PORT = config("NEO4J_PORT", default=7687, cast=int)
+    NEO4J_URI = config("NEO4J_URI", default=f"bolt://{NEO4J_HOST}:{NEO4J_PORT}")
     NEO4J_USER = config("NEO4J_USER", default="neo4j")
     NEO4J_PASSWORD = config("NEO4J_PASSWORD", default="test1234")
+    DATABASE_URL = f"bolt://{NEO4J_USER}:{NEO4J_PASSWORD}@{NEO4J_HOST}:{NEO4J_PORT}"
 
     # Redis Settings
     REDIS_URL = config("REDIS_URL", default="redis://localhost:6379")

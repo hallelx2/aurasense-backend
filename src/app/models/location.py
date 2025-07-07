@@ -4,6 +4,7 @@ Graph node and relationship model for locations (neomodel)
 """
 
 from neomodel import (
+    config,
     StructuredNode,
     StructuredRel,
     StringProperty,
@@ -14,16 +15,9 @@ from neomodel import (
     DateTimeProperty,
     RelationshipTo,
 )
-
-class DistanceRel(StructuredRel):
-    distance_km: float | None = FloatProperty()
-    travel_time_minutes: int | None = IntegerProperty()
-    transportation_type: str | None = StringProperty(choices=[
-        ("walking", "walking"),
-        ("driving", "driving"),
-        ("public_transport", "public_transport"),
-    ])
-
+from src.app.models.relationships import DistanceRel
+from src.app.core.config import settings
+config.DATABASE_URL = settings.DATABASE_URL
 class Location(StructuredNode):
     name: str = StringProperty(required=True, index=True)
     city: str = StringProperty(required=True, index=True)

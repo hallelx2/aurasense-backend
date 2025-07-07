@@ -7,7 +7,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import uuid
-
+from src.app.core.config import settings
+config.DATABASE_URL = settings.DATABASE_URL
 
 class UserSession(BaseModel):
     """User session data model"""
