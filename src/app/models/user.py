@@ -73,6 +73,10 @@ class User(StructuredNode):
             ("luxury", "luxury"),
         ]
     )
+    cultural_background: list[str] | None = ArrayProperty(StringProperty())
+    food_allergies: list[str] | None = ArrayProperty(StringProperty())
+    spice_tolerance: int | None = IntegerProperty()
+    preferred_languages: list[str] | None = ArrayProperty(StringProperty())
 
     # Temporal
     created_at: datetime = DateTimeProperty(default_now=True)

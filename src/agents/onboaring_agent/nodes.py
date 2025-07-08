@@ -1,4 +1,4 @@
-from .tools import transcribe_audio, extract_user_information, convert_text_to_speech
+from .tools import transcribe_audio, extract_user_information, convert_text_to_speech, generate_dietary_question, validate_dietary_response
 from .state import OnboardingAgentState
 
 # Onboarding-specific required fields (sign-up fields are already collected)
@@ -63,22 +63,27 @@ async def information_extraction_node(state: OnboardingAgentState) -> Onboarding
                 state["system_response"] = "Perfect! We have all the information we need to personalize your Aurasense experience."
             else:
                 state["onboarding_status"] = "pending_info"
-                # Synthesize a question for the next missing field
+                # Use AI-powered question generation for better user experience
                 next_field = missing_fields[0]
-                onboarding_questions = {
-                    "phone": "What's your phone number? This helps us send you important updates.",
-                    "age": "How old are you? This helps us provide age-appropriate recommendations.",
-                    "dietary_restrictions": "Do you have any dietary restrictions? For example, vegetarian, vegan, gluten-free, etc.",
-                    "cuisine_preferences": "What are your favorite types of cuisine? Tell me about the foods you love!",
-                    "price_range": "What's your preferred price range when dining out? Budget-friendly, mid-range, premium, or luxury?",
-                    "is_tourist": "Are you visiting this area as a tourist, or do you live here?",
-                    "cultural_background": "What's your cultural background? This helps us recommend authentic experiences.",
-                    "food_allergies": "Do you have any food allergies I should know about?",
-                    "spice_tolerance": "How much spice can you handle? Rate from 1 (mild) to 5 (very spicy).",
-                    "preferred_languages": "What languages do you prefer to communicate in?"
-                }
-                question = onboarding_questions.get(next_field, f"Please tell me about your {next_field.replace('_', ' ')}.")
-                state["system_response"] = question
+                try:
+                    question = generate_dietary_question(next_field, current_info)
+                    state["system_response"] = question
+                except:
+                    # Fallback to default questions if AI fails
+                    onboarding_questions = {
+                        "phone": "What's your phone number? This helps us send you important updates.",
+                        "age": "How old are you? This helps us provide age-appropriate recommendations.",
+                        "dietary_restrictions": "Do you have any dietary restrictions? For example, vegetarian, vegan, gluten-free, etc.",
+                        "cuisine_preferences": "What are your favorite types of cuisine? Tell me about the foods you love!",
+                        "price_range": "What's your preferred price range when dining out? Budget-friendly, mid-range, premium, or luxury?",
+                        "is_tourist": "Are you visiting this area as a tourist, or do you live here?",
+                        "cultural_background": "What's your cultural background? This helps us recommend authentic experiences.",
+                        "food_allergies": "Do you have any food allergies I should know about?",
+                        "spice_tolerance": "How much spice can you handle? Rate from 1 (mild) to 5 (very spicy).",
+                        "preferred_languages": "What languages do you prefer to communicate in?"
+                    }
+                    question = onboarding_questions.get(next_field, f"Please tell me about your {next_field.replace('_', ' ')}.")
+                    state["system_response"] = question
         else:
             state["error"] = "No text to extract information from"
             state["system_response"] = (

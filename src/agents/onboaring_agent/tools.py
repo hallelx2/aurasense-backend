@@ -232,7 +232,7 @@ async def convert_text_to_speech(
 
 def extract_user_information(text: str) -> Dict[str, Any]:
     """
-    Extract user information from text using structured LLM output.
+    Extract user information from text using structured LLM output with enhanced reasoning.
 
     Args:
         text: Input text to extract information from
@@ -242,29 +242,45 @@ def extract_user_information(text: str) -> Dict[str, Any]:
     """
 
     try:
-        # Create a prompt for extracting user information
         extraction_prompt = f"""
-        Extract user information from the following text. Only extract information that is explicitly mentioned.
-        If information is not provided, do not make assumptions.
-
-        Text: {text}
-
-        Extract the following if mentioned:
+        You are an expert nutritionist and cultural food specialist. Extract user information from the following text with careful reasoning.
+        
+        USER INPUT: {text}
+        
+        EXTRACTION RULES:
+        1. Only extract information that is explicitly mentioned or clearly implied
+        2. For dietary restrictions, look for mentions of: vegetarian, vegan, gluten-free, lactose-free, kosher, halal, keto, paleo, low-carb, diabetic, etc.
+        3. For cuisine preferences, identify specific cuisines like: Italian, Chinese, Mexican, Indian, Japanese, Mediterranean, etc.
+        4. For food allergies, look for mentions of: nuts, shellfish, dairy, eggs, soy, wheat, fish, etc.
+        5. For cultural/religious restrictions, identify: pork restriction (Islamic/Jewish), beef restriction (Hindu), alcohol restrictions, etc.
+        6. For spice tolerance, look for keywords: mild, medium, spicy, very spicy, no spice, love spice, etc.
+        7. For price preferences, map to: budget, mid-range, premium, luxury
+        8. For age, extract numeric values or age ranges
+        9. For tourist status, look for travel-related mentions
+        10. For preferred languages, identify language codes or language names
+        
+        Think step by step and provide reasoning for each extraction.
+        
+        REQUIRED FIELDS TO EXTRACT:
         - Email address
         - First name
         - Last name
         - Username
         - Phone number
         - Password
-        - Age
-        - Dietary restrictions
-        - Cuisine preferences
-        - Price range preference (budget, mid-range, premium, luxury)
-        - Whether they are a tourist
+        - Age (numeric)
+        - Dietary restrictions (list)
+        - Cuisine preferences (list)
+        - Price range preference (budget/mid-range/premium/luxury)
+        - Whether they are a tourist (boolean)
+        - Cultural background (list)
+        - Food allergies (list)
+        - Spice tolerance (1-5 scale)
+        - Preferred languages (list)
         """
 
-        # Use structured output with the LLM
-        llm_with_structured_response = llm_llama3.with_structured_output(
+        # Use Qwen model with reasoning capabilities
+        llm_with_structured_response = llm_qwen.with_structured_output(
             UserInformation
         )
         response = llm_with_structured_response.invoke(extraction_prompt)
@@ -285,7 +301,6 @@ def extract_user_information(text: str) -> Dict[str, Any]:
 
     except Exception as e:
         print(f"Error extracting user information: {str(e)}")
-        # Return empty dict on error rather than raising
         return {}
 
 
@@ -375,6 +390,128 @@ async def verify_voice_match(
         return False
 
 
+def generate_dietary_question(missing_field: str, user_context: Dict[str, Any] = None) -> str:
+    """
+    Generate contextual dietary preference questions using AI reasoning.
+    
+    Args:
+        missing_field: The field that needs to be collected
+        user_context: Any existing user information for context
+        
+    Returns:
+        Personalized question string
+    """
+    context = user_context or {}
+    
+    dietary_questions = {
+        "dietary_restrictions": [
+            "I'd love to know about your dietary preferences! Are you vegetarian, vegan, gluten-free, or following any specific eating plan?",
+            "Do you have any dietary restrictions I should know about? For example, are you vegetarian, vegan, keto, paleo, or have any medical dietary needs?",
+            "Let's talk about your diet! Are there any foods you avoid for health, religious, or personal reasons?"
+        ],
+        "cuisine_preferences": [
+            "What types of cuisine make your taste buds happy? Are you into Italian, Asian, Mexican, Mediterranean, or something else?",
+            "Tell me about your favorite food styles! Do you love spicy Asian dishes, comfort Italian food, fresh Mediterranean, or maybe authentic Mexican?",
+            "I'm curious about your food preferences! What cuisines do you find yourself craving most often?"
+        ],
+        "food_allergies": [
+            "For your safety, do you have any food allergies I absolutely need to know about? Things like nuts, shellfish, dairy, or eggs?",
+            "Are there any foods that cause allergic reactions for you? I want to make sure we avoid anything dangerous like nuts, shellfish, or dairy.",
+            "Let's talk about food allergies - do you have any that I should be aware of when suggesting restaurants?"
+        ],
+        "cultural_background": [
+            "What's your cultural background? This helps me recommend authentic experiences and understand any cultural food preferences.",
+            "I'd love to learn about your cultural heritage! Are there specific cultural or religious food traditions that are important to you?",
+            "Tell me about your cultural background - this helps me suggest authentic restaurants and respect any cultural food preferences."
+        ],
+        "spice_tolerance": [
+            "How do you handle spicy food? Are you a mild person, or do you love the heat? Rate yourself from 1 (no spice) to 5 (bring the fire)!",
+            "Let's talk spice! On a scale of 1-5, where 1 is mild and 5 is super spicy, what's your comfort level?",
+            "Are you a spice lover or do you prefer milder flavors? Rate your spice tolerance from 1 (mild) to 5 (very spicy)."
+        ],
+        "preferred_languages": [
+            "What languages do you prefer to communicate in? This helps me find restaurants with staff who speak your language.",
+            "Which languages are you most comfortable with? I can suggest places where you'll feel at home communicating.",
+            "Do you have preferred languages for communication? This helps me recommend restaurants with multilingual staff."
+        ],
+        "price_range": [
+            "What's your budget comfort zone for dining? Are you looking for budget-friendly spots, mid-range gems, or maybe premium experiences?",
+            "Let's talk budget! Are you more of a budget-conscious diner, mid-range explorer, or do you enjoy premium dining experiences?",
+            "What price range feels right for you? Budget-friendly, mid-range, premium, or luxury dining?"
+        ]
+    }
+    
+    questions = dietary_questions.get(missing_field, [f"Can you tell me about your {missing_field.replace('_', ' ')}?"])
+    
+    # Use AI to select and customize the question based on context
+    if context:
+        prompt = f"""
+        Based on the user context: {context}
+        
+        Select and customize the most appropriate question from these options:
+        {questions}
+        
+        Make it personal and conversational while maintaining the core information need.
+        Return only the customized question, no additional text.
+        """
+        
+        try:
+            response = llm_qwen.invoke(prompt)
+            return response.content.strip()
+        except:
+            pass
+    
+    # Fallback to first question if AI fails
+    import random
+    return random.choice(questions)
+
+
+def validate_dietary_response(field: str, response: str) -> Dict[str, Any]:
+    """
+    Validate and normalize dietary preference responses using AI reasoning.
+    
+    Args:
+        field: The field being validated
+        response: User's response
+        
+    Returns:
+        Dictionary with validation results and normalized value
+    """
+    
+    validation_prompt = f"""
+    You are validating a user's response for the field: {field}
+    User response: {response}
+    
+    Based on the field type, validate and normalize the response:
+    
+    For dietary_restrictions: Convert to list of standard dietary restrictions
+    For cuisine_preferences: Convert to list of standard cuisine types
+    For food_allergies: Convert to list of standard allergens
+    For cultural_background: Convert to list of cultural/ethnic backgrounds
+    For spice_tolerance: Convert to integer 1-5 scale
+    For preferred_languages: Convert to list of language codes
+    For price_range: Convert to one of: budget, mid-range, premium, luxury
+    
+    Return a JSON object with:
+    - "valid": boolean
+    - "normalized_value": the normalized value
+    - "confidence": float 0-1
+    - "suggestions": list of clarifying questions if needed
+    """
+    
+    try:
+        response = llm_qwen.invoke(validation_prompt)
+        import json
+        return json.loads(response.content)
+    except:
+        return {
+            "valid": False,
+            "normalized_value": None,
+            "confidence": 0.0,
+            "suggestions": [f"Could you clarify your {field.replace('_', ' ')}?"]
+        }
+
+
 async def save_user_to_graph_db(user_info: Dict[str, Any]) -> Dict[str, Any]:
     """
     Save the onboarded user to the graph database.
@@ -403,9 +540,10 @@ async def save_user_to_graph_db(user_info: Dict[str, Any]) -> Dict[str, Any]:
         user.cuisine_preferences = user_info.get("cuisine_preferences", user.cuisine_preferences)
         user.price_range = user_info.get("price_range", user.price_range)
         user.is_tourist = user_info.get("is_tourist", user.is_tourist)
-
-        # Note: cultural_background, food_allergies, spice_tolerance, preferred_languages
-        # are not in the current User model - they would need to be added or stored separately
+        user.cultural_background = user_info.get("cultural_background", user.cultural_background)
+        user.food_allergies = user_info.get("food_allergies", user.food_allergies)
+        user.spice_tolerance = user_info.get("spice_tolerance", user.spice_tolerance)
+        user.preferred_languages = user_info.get("preferred_languages", user.preferred_languages)
 
         # Mark user as onboarded
         user.is_onboarded = True
