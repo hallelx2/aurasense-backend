@@ -1,6 +1,6 @@
 from typing import Dict, Any, List, Optional
 import logging
-from graphiti import Client
+from src.app.services.graphiti import Client
 from src.app.core.config import settings
 from src.app.models.user import User
 
@@ -17,11 +17,17 @@ class MemoryService:
         try:
             graphiti_host = getattr(settings, 'GRAPHITI_HOST', 'localhost')
             graphiti_port = getattr(settings, 'GRAPHITI_PORT', 8080)
-            
+
             self.graphiti_client = Client(host=f"{graphiti_host}:{graphiti_port}")
             self.logger.info(f"Graphiti memory service initialized at {graphiti_host}:{graphiti_port}")
         except Exception as e:
             self.logger.error(f"Failed to initialize Graphiti: {e}")
+            self.graphiti_client = None
+
+    async def cleanup(self):
+        """Cleanup resources"""
+        if self.graphiti_client:
+            await self.graphiti_client.close()
             self.graphiti_client = None
 
     async def store_user_memory(self, user_id: str, memory_data: Dict[str, Any]) -> bool:
@@ -54,7 +60,7 @@ class MemoryService:
                 )
             else:
                 memories = []
-            
+
             self.logger.info(f"Retrieved {len(memories)} memories for user {user_id}")
             return memories
         except Exception as e:
@@ -74,7 +80,7 @@ class MemoryService:
                 "registration_date": user.created_at.isoformat() if user.created_at else None
             }
         }
-        
+
         return await self.store_user_memory(user.uid, memory_data)
 
     async def store_user_login(self, user: User) -> bool:
@@ -87,7 +93,7 @@ class MemoryService:
                 "login_timestamp": user.last_active.isoformat() if user.last_active else None
             }
         }
-        
+
         return await self.store_user_memory(user.uid, memory_data)
 
     async def store_user_logout(self, user_id: str) -> bool:
@@ -99,30 +105,30 @@ class MemoryService:
                 "logout_timestamp": None
             }
         }
-        
+
         return await self.store_user_memory(user_id, memory_data)
 
     async def get_user_context(self, user_id: str) -> Dict[str, Any]:
         memories = await self.retrieve_user_memories(user_id, limit=20)
-        
+
         context = {
             "user_id": user_id,
             "recent_activities": [],
             "preferences": {},
             "historical_data": memories
         }
-        
+
         for memory in memories:
             metadata = memory.get("metadata", {})
             event_type = metadata.get("event_type")
-            
+
             if event_type in ["user_login", "user_logout", "user_registration"]:
                 context["recent_activities"].append({
                     "type": event_type,
                     "timestamp": metadata.get("timestamp"),
                     "content": memory.get("content")
                 })
-        
+
         return context
 
 
