@@ -25,10 +25,7 @@ class AgentOrchestrator:
         """Initialize all agent instances"""
         self.agents = {
             "onboarding": OnboardingAgent(),
-            "authentication": AuthenticationAgent(),
             "food_ordering": FoodOrderingAgent(),
-            "travel": TravelAgent(),
-            "social": SocialAgent(),
             "profile_manager": ProfileManagerAgent(),
         }
 

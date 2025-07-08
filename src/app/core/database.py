@@ -4,7 +4,7 @@ Neo4j and Redis database setup and connections
 """
 
 from neo4j import GraphDatabase
-import redis
+import redis.asyncio as redis
 from typing import Optional
 import logging
 from .config import settings
@@ -57,7 +57,7 @@ class RedisCache:
         """Connect to Redis"""
         try:
             self.redis_client = redis.from_url(settings.REDIS_URL)
-            connected = self.redis_client.ping()
+            connected = await self.redis_client.ping()
             if not connected:
                 raise Exception("Failed to connect to Redis")
             self.logger.info("Connected to Redis")
@@ -68,17 +68,16 @@ class RedisCache:
     async def close(self):
         """Close Redis connection"""
         if self.redis_client:
-            self.redis_client.close()
+            await self.redis_client.close()
             self.logger.info("Redis connection closed")
 
     async def set(self, key: str, value: str, ttl: int = None):
         """Set key-value pair in Redis"""
-        self.redis_client.set(key, value, ex=ttl)
+        await self.redis_client.set(key, value, ex=ttl)
 
     async def get(self, key: str):
         """Get value from Redis"""
-        # Implementation will be added
-        pass
+        return await self.redis_client.get(key)
 
 
 # Global database instances

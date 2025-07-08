@@ -50,7 +50,7 @@ class SecurityManager:
     async def is_token_blacklisted(self, token: str) -> bool:
         if not redis_cache.redis_client:
             return False
-        result = await redis_cache.redis_client.get(f"blacklist:{token}")
+        result = await redis_cache.get(f"blacklist:{token}")
         return result is not None
 
     async def verify_token(self, token: str) -> Optional[Dict[str, Any]]:
