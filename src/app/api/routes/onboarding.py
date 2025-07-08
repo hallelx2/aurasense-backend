@@ -37,43 +37,64 @@ class OnboardingStopRequest(BaseModel):
 @router.post("/start")
 async def start_onboarding(request: OnboardingStartRequest, current_user: User = Depends(get_current_user)) -> Dict[str, Any]:
     """
-    Start the onboarding process for a user
+    Start the onboarding process for a user - now with dynamic database state checking
     """
     try:
         # Generate session ID for this onboarding session
         session_id = str(uuid.uuid4())
         
-        # Get user information from Bearer token
-        user_info = {
-            "email": current_user.email,
-            "first_name": current_user.first_name,
-            "last_name": current_user.last_name,
-            "phone": current_user.phone,
-            "age": current_user.age,
-            "dietary_restrictions": current_user.dietary_restrictions or [],
-            "cuisine_preferences": current_user.cuisine_preferences or [],
-            "price_range": current_user.price_range,
-            "is_tourist": current_user.is_tourist,
-            "cultural_background": current_user.cultural_background or [],
-            "food_allergies": current_user.food_allergies or [],
-            "spice_tolerance": current_user.spice_tolerance,
-            "preferred_languages": current_user.preferred_languages or ["en"]
-        }
+        # Check current user's onboarding state in database
+        from src.agents.onboaring_agent.tools import get_user_onboarding_state, generate_contextual_onboarding_question
+        
+        db_state = await get_user_onboarding_state(current_user.email)
+        
+        if db_state.get("success"):
+            missing_fields = db_state.get("missing_fields", [])
+            current_state = db_state.get("current_state", {})
+            completion_percentage = db_state.get("completion_percentage", 0)
+            
+            if not missing_fields:
+                # User is already fully onboarded
+                response_text = f"Welcome back {current_user.first_name}! Your personalization is already complete. You're all set to discover amazing food experiences!"
+                onboarding_status = "onboarded"
+            else:
+                # Generate dynamic question based on missing fields
+                next_field = missing_fields[0]
+                response_text = generate_contextual_onboarding_question(next_field, current_state)
+                onboarding_status = "pending_info"
+            
+            # Use database state as initial information
+            user_info = current_state
+        else:
+            # Fallback to basic user info if database query fails
+            user_info = {
+                "email": current_user.email,
+                "first_name": current_user.first_name,
+                "last_name": current_user.last_name,
+                "phone": current_user.phone,
+                "age": current_user.age,
+                "dietary_restrictions": current_user.dietary_restrictions or [],
+                "cuisine_preferences": current_user.cuisine_preferences or [],
+                "price_range": current_user.price_range,
+                "is_tourist": current_user.is_tourist,
+                "cultural_background": current_user.cultural_background or [],
+                "food_allergies": current_user.food_allergies or [],
+                "spice_tolerance": current_user.spice_tolerance,
+                "preferred_languages": current_user.preferred_languages or ["en"]
+            }
+            response_text = f"Welcome {current_user.first_name}! Let's personalize your Aurasense experience. I'll ask you a few questions to understand your preferences better."
+            onboarding_status = "pending_info"
         
         # Initialize onboarding state
         initial_state = OnboardingAgentState(
             user_input="Hello, I'm ready to start onboarding!",
             extracted_information=user_info,
-            onboarding_status="pending_info",
+            onboarding_status=onboarding_status,
+            system_response=response_text,
             messages=[]
         )
         
-        # Start the onboarding process
-        state = await run_onboarding_agent(initial_state["user_input"])
-        
         # Convert response to speech if needed
-        response_text = state.get("system_response", "Welcome! Let's get you set up with personalized recommendations.")
-        
         try:
             audio_path = await convert_text_to_speech(response_text)
             with open(audio_path, "rb") as f:
@@ -85,14 +106,14 @@ async def start_onboarding(request: OnboardingStartRequest, current_user: User =
             audio_base64 = None
         
         # Store session state in Neo4j
-        await _store_session_state(current_user.uid, session_id, state)
+        await _store_session_state(current_user.uid, session_id, initial_state)
         
         return {
             "session_id": session_id,
             "message": response_text,
             "audio_response": audio_base64,
-            "onboarding_status": state.get("onboarding_status", "pending_info"),
-            "progress": _calculate_progress(state.get("extracted_information", {})),
+            "onboarding_status": onboarding_status,
+            "progress": _calculate_progress(user_info),
             "user_id": current_user.uid,
             "success": True
         }
@@ -301,11 +322,20 @@ async def _save_onboarding_to_user(user: User, extracted_info: Dict[str, Any]) -
 
 def _calculate_progress(extracted_info: Dict[str, Any]) -> float:
     """
-    Calculate onboarding progress based on extracted information
+    Calculate onboarding progress based on extracted information - updated for dynamic field checking
     """
-    from src.agents.onboaring_agent.nodes import ONBOARDING_REQUIRED_FIELDS
+    # Use the same onboarding fields as defined in the database state checking
+    onboarding_fields = [
+        "age", "dietary_restrictions", "cuisine_preferences", 
+        "price_range", "is_tourist", "cultural_background", 
+        "food_allergies", "spice_tolerance", "preferred_languages", "phone"
+    ]
     
-    completed_fields = sum(1 for field in ONBOARDING_REQUIRED_FIELDS if extracted_info.get(field))
-    total_fields = len(ONBOARDING_REQUIRED_FIELDS)
+    completed_fields = 0
+    for field in onboarding_fields:
+        value = extracted_info.get(field)
+        if value is not None and value != [] and value != "":
+            completed_fields += 1
     
+    total_fields = len(onboarding_fields)
     return (completed_fields / total_fields) * 100.0 if total_fields > 0 else 0.0

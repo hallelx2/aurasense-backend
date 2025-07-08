@@ -1,4 +1,4 @@
-from .tools import transcribe_audio, extract_user_information, convert_text_to_speech, generate_dietary_question, validate_dietary_response
+from .tools import transcribe_audio, extract_user_information, convert_text_to_speech, generate_dietary_question, validate_dietary_response, get_user_onboarding_state, generate_contextual_onboarding_question
 from .state import OnboardingAgentState
 
 # Onboarding-specific required fields (sign-up fields are already collected)
@@ -41,7 +41,7 @@ async def transcription_node(state: OnboardingAgentState) -> OnboardingAgentStat
 
 
 async def information_extraction_node(state: OnboardingAgentState) -> OnboardingAgentState:
-    """Extract user information from transcribed text and synthesize next onboarding question"""
+    """Extract user information from transcribed text and synthesize next onboarding question based on database state"""
     try:
         text = state.get("transcribed_text")
         if text:
@@ -55,35 +55,43 @@ async def information_extraction_node(state: OnboardingAgentState) -> Onboarding
             current_info.update(extracted)
             state["extracted_information"] = current_info
 
-            # Check for missing onboarding fields only
-            missing_fields = [f for f in ONBOARDING_REQUIRED_FIELDS if not current_info.get(f)]
-
-            if not missing_fields:
-                state["onboarding_status"] = "ready"
-                state["system_response"] = "Perfect! We have all the information we need to personalize your Aurasense experience."
+            # Get user's current database state - THIS IS THE KEY CHANGE
+            user_email = current_info.get("email")
+            if user_email:
+                db_state = await get_user_onboarding_state(user_email)
+                if db_state.get("success"):
+                    # Use database state to determine missing fields
+                    missing_fields = db_state.get("missing_fields", [])
+                    db_current_state = db_state.get("current_state", {})
+                    
+                    # Merge database state with current conversation state
+                    merged_state = {**db_current_state, **current_info}
+                    state["extracted_information"] = merged_state
+                    
+                    if not missing_fields:
+                        state["onboarding_status"] = "ready"
+                        state["system_response"] = "Perfect! We have all the information we need to personalize your Aurasense experience."
+                    else:
+                        state["onboarding_status"] = "pending_info"
+                        # Generate contextual question based on missing field and current state
+                        next_field = missing_fields[0]
+                        question = generate_contextual_onboarding_question(next_field, merged_state)
+                        state["system_response"] = question
+                else:
+                    # Fallback to old logic if database query fails
+                    missing_fields = [f for f in ONBOARDING_REQUIRED_FIELDS if not current_info.get(f)]
+                    if not missing_fields:
+                        state["onboarding_status"] = "ready"
+                        state["system_response"] = "Perfect! We have all the information we need to personalize your Aurasense experience."
+                    else:
+                        state["onboarding_status"] = "pending_info"
+                        next_field = missing_fields[0]
+                        question = generate_contextual_onboarding_question(next_field, current_info)
+                        state["system_response"] = question
             else:
+                # No email found - ask for it first
                 state["onboarding_status"] = "pending_info"
-                # Use AI-powered question generation for better user experience
-                next_field = missing_fields[0]
-                try:
-                    question = generate_dietary_question(next_field, current_info)
-                    state["system_response"] = question
-                except:
-                    # Fallback to default questions if AI fails
-                    onboarding_questions = {
-                        "phone": "What's your phone number? This helps us send you important updates.",
-                        "age": "How old are you? This helps us provide age-appropriate recommendations.",
-                        "dietary_restrictions": "Do you have any dietary restrictions? For example, vegetarian, vegan, gluten-free, etc.",
-                        "cuisine_preferences": "What are your favorite types of cuisine? Tell me about the foods you love!",
-                        "price_range": "What's your preferred price range when dining out? Budget-friendly, mid-range, premium, or luxury?",
-                        "is_tourist": "Are you visiting this area as a tourist, or do you live here?",
-                        "cultural_background": "What's your cultural background? This helps us recommend authentic experiences.",
-                        "food_allergies": "Do you have any food allergies I should know about?",
-                        "spice_tolerance": "How much spice can you handle? Rate from 1 (mild) to 5 (very spicy).",
-                        "preferred_languages": "What languages do you prefer to communicate in?"
-                    }
-                    question = onboarding_questions.get(next_field, f"Please tell me about your {next_field.replace('_', ' ')}.")
-                    state["system_response"] = question
+                state["system_response"] = "I need your email address to continue with your personalization. Could you please provide your email?"
         else:
             state["error"] = "No text to extract information from"
             state["system_response"] = (
@@ -102,19 +110,48 @@ async def onboarding_complete_node(state: OnboardingAgentState) -> OnboardingAge
     """Complete onboarding and save user if all info is present"""
     try:
         info = state.get("extracted_information", {})
-        # Only check onboarding fields, not sign-up fields
-        if all(info.get(f) for f in ONBOARDING_REQUIRED_FIELDS):
-            from .tools import save_user_to_graph_db
-            save_result = await save_user_to_graph_db(info)
-            if save_result.get("success"):
-                state["onboarding_status"] = "onboarded"
-                state["system_response"] = "Congratulations! Your personalization is complete. Welcome to your personalized Aurasense experience!"
+        user_email = info.get("email")
+        
+        if user_email:
+            # Check current database state to see what's still missing
+            db_state = await get_user_onboarding_state(user_email)
+            if db_state.get("success"):
+                missing_fields = db_state.get("missing_fields", [])
+                
+                if not missing_fields:
+                    # All required fields are present, complete onboarding
+                    from .tools import save_user_to_graph_db
+                    save_result = await save_user_to_graph_db(info)
+                    if save_result.get("success"):
+                        state["onboarding_status"] = "onboarded"
+                        first_name = info.get("first_name", "")
+                        greeting = f"Congratulations {first_name}! " if first_name else "Congratulations! "
+                        state["system_response"] = f"{greeting}Your personalization is complete. Welcome to your personalized Aurasense experience!"
+                    else:
+                        state["onboarding_status"] = "failed"
+                        state["system_response"] = f"Onboarding failed: {save_result.get('message', 'Unknown error')}"
+                else:
+                    # Still missing fields
+                    state["onboarding_status"] = "pending_info"
+                    missing_count = len(missing_fields)
+                    state["system_response"] = f"We still need {missing_count} more piece{'s' if missing_count > 1 else ''} of information to personalize your experience."
             else:
-                state["onboarding_status"] = "failed"
-                state["system_response"] = f"Onboarding failed: {save_result.get('message', 'Unknown error')}"
+                # Fallback to old logic if database query fails
+                if all(info.get(f) for f in ONBOARDING_REQUIRED_FIELDS):
+                    from .tools import save_user_to_graph_db
+                    save_result = await save_user_to_graph_db(info)
+                    if save_result.get("success"):
+                        state["onboarding_status"] = "onboarded"
+                        state["system_response"] = "Congratulations! Your personalization is complete. Welcome to your personalized Aurasense experience!"
+                    else:
+                        state["onboarding_status"] = "failed"
+                        state["system_response"] = f"Onboarding failed: {save_result.get('message', 'Unknown error')}"
+                else:
+                    state["onboarding_status"] = "pending_info"
+                    state["system_response"] = "We still need a bit more information to personalize your experience."
         else:
             state["onboarding_status"] = "pending_info"
-            state["system_response"] = "We still need a bit more information to personalize your experience."
+            state["system_response"] = "I need your email address to continue with your personalization."
     except Exception as e:
         state["error"] = f"Onboarding failed: {str(e)}"
         state["onboarding_status"] = "failed"

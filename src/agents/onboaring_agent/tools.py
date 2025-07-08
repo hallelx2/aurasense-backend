@@ -233,6 +233,7 @@ async def convert_text_to_speech(
 def extract_user_information(text: str) -> Dict[str, Any]:
     """
     Extract user information from text using structured LLM output with enhanced reasoning.
+    This function now focuses on extracting the final answer without <think> tags.
 
     Args:
         text: Input text to extract information from
@@ -243,7 +244,7 @@ def extract_user_information(text: str) -> Dict[str, Any]:
 
     try:
         extraction_prompt = f"""
-        You are an expert nutritionist and cultural food specialist. Extract user information from the following text with careful reasoning.
+        You are an expert nutritionist and cultural food specialist. Extract user information from the following text.
         
         USER INPUT: {text}
         
@@ -259,7 +260,7 @@ def extract_user_information(text: str) -> Dict[str, Any]:
         9. For tourist status, look for travel-related mentions
         10. For preferred languages, identify language codes or language names
         
-        Think step by step and provide reasoning for each extraction.
+        Extract the information and provide the structured response directly. Do not include reasoning or thinking process.
         
         REQUIRED FIELDS TO EXTRACT:
         - Email address
@@ -510,6 +511,138 @@ def validate_dietary_response(field: str, response: str) -> Dict[str, Any]:
             "confidence": 0.0,
             "suggestions": [f"Could you clarify your {field.replace('_', ' ')}?"]
         }
+
+
+async def get_user_onboarding_state(user_email: str) -> Dict[str, Any]:
+    """
+    Get the current onboarding state for a user from the database.
+    Args:
+        user_email: User's email address
+    Returns:
+        Dictionary with current user state and missing fields
+    """
+    try:
+        from src.app.models.user import User
+        
+        # Find the user by email
+        user = User.nodes.filter(email=user_email).first()
+        if not user:
+            return {"success": False, "message": "User not found", "missing_fields": []}
+        
+        # Define all possible onboarding fields
+        onboarding_fields = [
+            "age", "dietary_restrictions", "cuisine_preferences", 
+            "price_range", "is_tourist", "cultural_background", 
+            "food_allergies", "spice_tolerance", "preferred_languages", "phone"
+        ]
+        
+        # Get current user state
+        current_state = {
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "username": user.username,
+            "phone": user.phone,
+            "age": user.age,
+            "dietary_restrictions": user.dietary_restrictions or [],
+            "cuisine_preferences": user.cuisine_preferences or [],
+            "price_range": user.price_range,
+            "is_tourist": user.is_tourist,
+            "cultural_background": user.cultural_background or [],
+            "food_allergies": user.food_allergies or [],
+            "spice_tolerance": user.spice_tolerance,
+            "preferred_languages": user.preferred_languages or ["en"],
+            "is_onboarded": user.is_onboarded
+        }
+        
+        # Identify missing fields
+        missing_fields = []
+        for field in onboarding_fields:
+            value = current_state.get(field)
+            if value is None or (isinstance(value, list) and len(value) == 0):
+                missing_fields.append(field)
+        
+        return {
+            "success": True,
+            "current_state": current_state,
+            "missing_fields": missing_fields,
+            "is_onboarded": user.is_onboarded,
+            "completion_percentage": ((len(onboarding_fields) - len(missing_fields)) / len(onboarding_fields)) * 100
+        }
+        
+    except Exception as e:
+        return {"success": False, "message": str(e), "missing_fields": []}
+
+
+def generate_contextual_onboarding_question(missing_field: str, current_state: Dict[str, Any]) -> str:
+    """
+    Generate a contextual, intelligent onboarding question based on the missing field and current user state.
+    Args:
+        missing_field: The field that needs to be collected
+        current_state: Current user information for context
+    Returns:
+        Personalized question string
+    """
+    
+    # Get user's name for personalization
+    first_name = current_state.get("first_name", "")
+    name_greeting = f"{first_name}, " if first_name else ""
+    
+    # Context-aware question generation
+    question_prompts = {
+        "age": f"Hi {name_greeting}to provide you with the most suitable recommendations, could you tell me your age?",
+        
+        "dietary_restrictions": f"{name_greeting}I'd love to know about your dietary preferences! Are you vegetarian, vegan, gluten-free, or following any specific eating plan?",
+        
+        "cuisine_preferences": f"{name_greeting}what types of cuisine make your taste buds happy? Are you into Italian, Asian, Mexican, Mediterranean, or something else?",
+        
+        "price_range": f"{name_greeting}what's your preferred price range when dining out? Are you looking for budget-friendly spots, mid-range options, premium experiences, or luxury dining?",
+        
+        "is_tourist": f"{name_greeting}are you visiting this area as a tourist, or do you live here locally? This helps me recommend the best experiences for you.",
+        
+        "cultural_background": f"{name_greeting}what's your cultural background? This helps me recommend authentic experiences and understand any cultural food preferences you might have.",
+        
+        "food_allergies": f"{name_greeting}for your safety, do you have any food allergies I absolutely need to know about? Things like nuts, shellfish, dairy, or eggs?",
+        
+        "spice_tolerance": f"{name_greeting}how do you handle spicy food? Are you a mild person, or do you love the heat? Rate yourself from 1 (no spice) to 5 (bring the fire)!",
+        
+        "preferred_languages": f"{name_greeting}what languages do you prefer to communicate in? This helps me find restaurants with staff who speak your language.",
+        
+        "phone": f"{name_greeting}what's your phone number? This helps us send you important updates and reservation confirmations."
+    }
+    
+    # Get the base question
+    base_question = question_prompts.get(missing_field, f"{name_greeting}could you tell me about your {missing_field.replace('_', ' ')}?")
+    
+    # Use AI to make it more contextual if we have enough user information
+    if len(current_state) > 3:  # If we have some context
+        try:
+            context_prompt = f"""
+            You are a friendly onboarding assistant. Based on the user's current information: {current_state}
+            
+            Generate a personalized, conversational question to ask about their {missing_field.replace('_', ' ')}.
+            Make it feel natural and contextual based on what you already know about them.
+            
+            Base question: {base_question}
+            
+            Requirements:
+            - Make it personal but not intrusive
+            - Keep it concise and conversational
+            - Return ONLY the final question
+            - Do not include any reasoning, thinking, or additional text
+            - Do not use <think> tags or similar formatting
+            
+            Respond with just the question:
+            """
+            
+            response = llm_qwen.invoke(context_prompt)
+            return response.content.strip()
+            
+        except Exception as e:
+            print(f"AI question generation failed: {e}")
+            return base_question
+    
+    return base_question
 
 
 async def save_user_to_graph_db(user_info: Dict[str, Any]) -> Dict[str, Any]:
