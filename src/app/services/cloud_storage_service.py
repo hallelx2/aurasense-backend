@@ -27,7 +27,9 @@ class CloudStorageService:
         # Implementation will be added
         pass
 
-    async def generate_presigned_upload_url(self, file_name: str, content_type: str) -> Dict[str, Any]:
+    async def generate_presigned_upload_url(
+        self, file_name: str, content_type: str
+    ) -> Dict[str, Any]:
         """Generate presigned URL for direct upload"""
         # Implementation will be added
         pass

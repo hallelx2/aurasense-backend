@@ -17,7 +17,9 @@ class AudioService:
     def __init__(self):
         self.logger = logging.getLogger("service.audio")
 
-    async def process_audio_file(self, audio_url: str, user_id: str, session_id: str) -> Dict[str, Any]:
+    async def process_audio_file(
+        self, audio_url: str, user_id: str, session_id: str
+    ) -> Dict[str, Any]:
         """Process audio file from cloud storage"""
         # Implementation will be added
         pass

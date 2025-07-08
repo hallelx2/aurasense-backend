@@ -10,6 +10,7 @@ from datetime import datetime
 
 class BaseResponse(BaseModel):
     """Base response schema"""
+
     success: bool = True
     message: str = "Operation completed successfully"
     timestamp: datetime = Field(default_factory=datetime.utcnow)
@@ -17,6 +18,7 @@ class BaseResponse(BaseModel):
 
 class VoiceProcessingResponse(BaseResponse):
     """Voice processing response schema"""
+
     transcription: str
     agent_response: str
     agent_name: str
@@ -28,16 +30,19 @@ class VoiceProcessingResponse(BaseResponse):
 
 class AuthenticationResponse(BaseResponse):
     """Authentication response schema"""
+
     authenticated: bool
     user_id: str
     session_id: str
     access_token: Optional[str] = None
     challenge_sentence: Optional[str] = None
     verification_score: Optional[float] = None
+    isOnboarded: bool = False
 
 
 class RecommendationResponse(BaseResponse):
     """Recommendation response schema"""
+
     recommendations: List[Dict[str, Any]]
     recommendation_type: str
     personalization_score: float
@@ -47,6 +52,7 @@ class RecommendationResponse(BaseResponse):
 
 class OrderResponse(BaseResponse):
     """Order response schema"""
+
     order_id: str
     restaurant_name: str
     estimated_delivery_time: Optional[datetime] = None
@@ -57,7 +63,9 @@ class OrderResponse(BaseResponse):
 
 class SessionResponse(BaseResponse):
     """Session response schema"""
+
     session_id: str
     user_id: str
     expires_at: Optional[datetime] = None
     current_context: Dict[str, Any] = {}
+    isOnboarded: bool = False

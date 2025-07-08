@@ -9,6 +9,7 @@ from .food import router as food_router
 from .travel import router as travel_router
 from .social import router as social_router
 from .auth import router as auth_router
+from .onboarding_ws import router as onboarding_ws_router
 
 __all__ = [
     "auth_router",
@@ -16,5 +17,5 @@ __all__ = [
     "onboarding_router",
     "food_router",
     "travel_router",
-    "social_router"
+    "social_router",
 ]

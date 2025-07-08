@@ -17,7 +17,10 @@ from neomodel import (
 )
 from src.app.models.relationships import DistanceRel
 from src.app.core.config import settings
+
 config.DATABASE_URL = settings.DATABASE_URL
+
+
 class Location(StructuredNode):
     name: str = StringProperty(required=True, index=True)
     city: str = StringProperty(required=True, index=True)
@@ -25,12 +28,14 @@ class Location(StructuredNode):
     country: str = StringProperty(required=True)
     latitude: float | None = FloatProperty()
     longitude: float | None = FloatProperty()
-    location_type: str | None = StringProperty(choices=[
-        ("neighborhood", "neighborhood"),
-        ("district", "district"),
-        ("city", "city"),
-        ("landmark", "landmark"),
-    ])
+    location_type: str | None = StringProperty(
+        choices=[
+            ("neighborhood", "neighborhood"),
+            ("district", "district"),
+            ("city", "city"),
+            ("landmark", "landmark"),
+        ]
+    )
 
     # Relationships
     nearby_locations = RelationshipTo(

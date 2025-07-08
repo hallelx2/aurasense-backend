@@ -17,7 +17,7 @@ from .api.routes import (
     food_router,
     travel_router,
     social_router,
-    auth_router
+    auth_router,
 )
 
 from scalar_fastapi import get_scalar_api_reference
@@ -50,7 +50,7 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description="Voice-first agentic lifestyle companion",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # Add CORS middleware
@@ -77,7 +77,7 @@ async def root():
     return {
         "message": "Welcome to Aurasense API",
         "version": settings.APP_VERSION,
-        "status": "operational"
+        "status": "operational",
     }
 
 
@@ -87,11 +87,7 @@ async def health_check():
     return {
         "status": "healthy",
         "timestamp": "2024-01-01T00:00:00Z",
-        "services": {
-            "neo4j": "connected",
-            "redis": "connected",
-            "groq": "available"
-        }
+        "services": {"neo4j": "connected", "redis": "connected", "groq": "available"},
     }
 
 
@@ -103,21 +99,21 @@ async def get_scalar_docs():
         title=app.title,
     )
 
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler"""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error"}
-    )
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "src.app.main:app",
         host=settings.HOST,
         port=settings.PORT,
         reload=settings.ENVIRONMENT == "development",
-        log_level=settings.LOG_LEVEL.lower()
+        log_level=settings.LOG_LEVEL.lower(),
     )

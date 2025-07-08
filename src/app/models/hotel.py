@@ -21,13 +21,17 @@ from neomodel import (
     DateTimeProperty,
     RelationshipTo,
 )
+
 # Import shared relationship models from user.py
 from src.app.models.relationships import StayedRel, RatingRel
 from src.app.core.config import settings
+
 config.DATABASE_URL = settings.DATABASE_URL
+
 
 class Hotel(StructuredNode):
     """Hotel data model"""
+
     hotel_id: str = UniqueIdProperty()
     name: str = StringProperty(required=True, index=True)
     address: str
@@ -36,10 +40,20 @@ class Hotel(StructuredNode):
     star_rating: int | None = IntegerProperty()
     rating: Optional[float] = None
     price_range: str | None = StringProperty(
-        choices=[("budget", "budget"), ("mid-range", "mid-range"), ("premium", "premium"), ("luxury", "luxury")]
+        choices=[
+            ("budget", "budget"),
+            ("mid-range", "mid-range"),
+            ("premium", "premium"),
+            ("luxury", "luxury"),
+        ]
     )
     hotel_type: str | None = StringProperty(
-        choices=[("business", "business"), ("leisure", "leisure"), ("boutique", "boutique"), ("resort", "resort")]
+        choices=[
+            ("business", "business"),
+            ("leisure", "leisure"),
+            ("boutique", "boutique"),
+            ("resort", "resort"),
+        ]
     )
     amenities: list[str] | None = ArrayProperty(StringProperty())
     room_types: List[str] = []
@@ -67,6 +81,7 @@ class Hotel(StructuredNode):
 
 class HotelBooking(BaseModel):
     """Hotel booking data model"""
+
     booking_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     hotel_id: str
@@ -85,6 +100,7 @@ class HotelBooking(BaseModel):
 
 class TravelContext(BaseModel):
     """Travel context data model"""
+
     user_id: str
     current_location: Dict[str, Any]
     destination: Optional[Dict[str, Any]] = None

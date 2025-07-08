@@ -23,10 +23,20 @@ from neomodel import (
     JSONProperty,
 )
 from datetime import datetime
+
 # Import shared relationship models from user.py
-from src.app.models.relationships import RatingRel, SimilarityRel, LikesRel, DislikesRel, VisitedRel
+from src.app.models.relationships import (
+    RatingRel,
+    SimilarityRel,
+    LikesRel,
+    DislikesRel,
+    VisitedRel,
+)
 from src.app.core.config import settings
+
 config.DATABASE_URL = settings.DATABASE_URL
+
+
 class Restaurant(StructuredNode):
     restaurant_id: str = UniqueIdProperty()
     name: str = StringProperty(required=True, index=True)
@@ -36,7 +46,12 @@ class Restaurant(StructuredNode):
     categories: list[str] | None = ArrayProperty(StringProperty())
 
     price_range: str | None = StringProperty(
-        choices=[("budget", "budget"), ("mid-range", "mid-range"), ("premium", "premium"), ("luxury", "luxury")]
+        choices=[
+            ("budget", "budget"),
+            ("mid-range", "mid-range"),
+            ("premium", "premium"),
+            ("luxury", "luxury"),
+        ]
     )
     rating: float = FloatProperty(default=0.0)
     total_reviews: int = IntegerProperty(default=0)
@@ -55,6 +70,7 @@ class Restaurant(StructuredNode):
 
 class Restaurant(BaseModel):
     """Restaurant data model"""
+
     restaurant_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     cuisine_types: List[str] = []
@@ -78,6 +94,7 @@ class Restaurant(BaseModel):
 
 class MenuItem(BaseModel):
     """Menu item data model"""
+
     item_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     restaurant_id: str
     name: str
@@ -97,6 +114,7 @@ class MenuItem(BaseModel):
 
 class RestaurantAvailability(BaseModel):
     """Restaurant availability status"""
+
     restaurant_id: str
     is_open: bool
     is_accepting_orders: bool
@@ -109,6 +127,7 @@ class RestaurantAvailability(BaseModel):
 
 class FoodOrder(BaseModel):
     """Food order data model"""
+
     order_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     restaurant_id: str

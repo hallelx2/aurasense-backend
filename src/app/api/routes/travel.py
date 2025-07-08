@@ -32,7 +32,9 @@ async def get_hotel_recommendations(request: TravelRequest) -> Dict[str, Any]:
 
 
 @router.post("/location-changed")
-async def handle_location_change(user_id: str, new_location: Dict[str, float]) -> Dict[str, Any]:
+async def handle_location_change(
+    user_id: str, new_location: Dict[str, float]
+) -> Dict[str, Any]:
     """
     Handle user location change
     """

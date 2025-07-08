@@ -37,9 +37,19 @@ from src.app.models.location import Location
 from src.app.models.hotel import Hotel
 from src.app.models.restaurant import Restaurant
 from src.app.models.order import Order
-from src.app.models.relationships import VisitedRel, StayedRel, LikesRel, DislikesRel, RatingRel, FriendsRel
+from src.app.models.relationships import (
+    VisitedRel,
+    StayedRel,
+    LikesRel,
+    DislikesRel,
+    RatingRel,
+    FriendsRel,
+)
 from src.app.core.config import settings
+
 config.DATABASE_URL = settings.DATABASE_URL
+
+
 class User(StructuredNode):
     uid: str = UniqueIdProperty()
     email: str = EmailProperty(unique_index=True, required=True)
@@ -56,13 +66,20 @@ class User(StructuredNode):
     dietary_restrictions: list[str] | None = ArrayProperty(StringProperty())
     cuisine_preferences: list[str] | None = ArrayProperty(StringProperty())
     price_range: str | None = StringProperty(
-        choices=[("budget", "budget"), ("mid-range", "mid-range"), ("premium", "premium"), ("luxury", "luxury")]
+        choices=[
+            ("budget", "budget"),
+            ("mid-range", "mid-range"),
+            ("premium", "premium"),
+            ("luxury", "luxury"),
+        ]
     )
 
     # Temporal
     created_at: datetime = DateTimeProperty(default_now=True)
     last_active: datetime = DateTimeProperty(default_now=True)
     is_tourist: bool = BooleanProperty(default=False)
+    # Onboarding status
+    is_onboarded: bool = BooleanProperty(default=False)
 
     # Relationships
     current_location = RelationshipTo("Location", "CURRENTLY_AT")
@@ -71,9 +88,7 @@ class User(StructuredNode):
     friends = RelationshipTo("User", "FRIENDS", model=FriendsRel)
     follows = RelationshipTo("User", "FOLLOWS")
 
-    visited_restaurants = RelationshipTo(
-        "Restaurant", "VISITED", model=VisitedRel
-    )
+    visited_restaurants = RelationshipTo("Restaurant", "VISITED", model=VisitedRel)
     visited_hotels = RelationshipTo("Hotel", "STAYED_AT", model=StayedRel)
 
     likes = RelationshipTo("Restaurant", "LIKES", model=LikesRel)
@@ -83,8 +98,10 @@ class User(StructuredNode):
 
     orders = RelationshipTo("Order", "PLACED_ORDER")
 
+
 class UserProfile(BaseModel):
     """User profile data model"""
+
     user_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     email: str
     cultural_background: List[str] = []
@@ -97,10 +114,12 @@ class UserProfile(BaseModel):
     voice_profile: Optional[Dict[str, Any]] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    is_onboarded: bool = Field(default=False, alias="isOnboarded")
 
 
 class VoiceProfile(BaseModel):
     """Voice authentication profile"""
+
     user_id: str
     voice_print_hash: str
     accent_type: Optional[str] = None
@@ -113,6 +132,7 @@ class VoiceProfile(BaseModel):
 
 class HealthProfile(BaseModel):
     """Health and dietary profile"""
+
     user_id: str
     allergies: List[str] = []
     dietary_restrictions: List[str] = []
@@ -124,6 +144,7 @@ class HealthProfile(BaseModel):
 
 class CulturalProfile(BaseModel):
     """Cultural background and preferences"""
+
     user_id: str
     cultural_backgrounds: List[str] = []
     religious_preferences: List[str] = []

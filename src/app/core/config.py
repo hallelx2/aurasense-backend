@@ -5,10 +5,12 @@ Central configuration management for Aurasense
 
 from decouple import config, Csv
 
+
 class Settings:
     """
     Application settings with environment variable support (using python-decouple)
     """
+
     # Application Settings
     APP_NAME = config("APP_NAME", default="Aurasense")
     APP_VERSION = config("APP_VERSION", default="0.1.0")
@@ -36,7 +38,7 @@ class Settings:
     GROQ_API_KEY = config("GROQ_API_KEY", default="")
     GOOGLE_PLACES_API_KEY = config("GOOGLE_PLACES_API_KEY", default="")
     FOURSQUARE_API_KEY = config("FOURSQUARE_API_KEY", default="")
-
+    ANTHROPIC_API_KEY = config("ANTHROPIC_API_KEY", default="")
     # Cloud Storage (Alternative Architecture)
     CLOUD_STORAGE_PROVIDER = config("CLOUD_STORAGE_PROVIDER", default="aws")
     AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
@@ -51,7 +53,10 @@ class Settings:
     # Security
     SECRET_KEY = config("SECRET_KEY", default="your-secret-key-change-this")
     ALGORITHM = config("ALGORITHM", default="HS256")
-    ACCESS_TOKEN_EXPIRE_MINUTES = config("ACCESS_TOKEN_EXPIRE_MINUTES", default=30, cast=int)
+    ACCESS_TOKEN_EXPIRE_MINUTES = config(
+        "ACCESS_TOKEN_EXPIRE_MINUTES", default=30, cast=int
+    )
+
 
 # Global settings instance
 settings = Settings()

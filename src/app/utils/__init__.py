@@ -16,5 +16,5 @@ __all__ = [
     "format_response",
     "generate_session_id",
     "calculate_distance",
-    "merge_contexts"
+    "merge_contexts",
 ]

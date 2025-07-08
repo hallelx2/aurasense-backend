@@ -1,28 +1,28 @@
 from .nodes import (
     transcription_node,
     information_extraction_node,
-    authentication_node,
+    onboarding_complete_node,
     generate_response_node,
     end_interaction_node,
-    is_authenticated,
+    is_onboarded,
     needs_more_info,
 )
-from .state import AuthAgentState
+from .state import OnboardingAgentState
 from langgraph.graph import StateGraph, END
 from typing import Union
 import logging
 
 
-def create_auth_agent_graph():
-    """Create and return the authentication agent graph (no verification in this flow)"""
+def create_onboarding_agent_graph():
+    """Create and return the onboarding agent graph"""
 
     # Initialize the graph
-    workflow = StateGraph(AuthAgentState)
+    workflow = StateGraph(OnboardingAgentState)
 
     # Add nodes
     workflow.add_node("transcription", transcription_node)
     workflow.add_node("info_extraction", information_extraction_node)
-    workflow.add_node("authentication", authentication_node)
+    workflow.add_node("onboarding_complete", onboarding_complete_node)
     workflow.add_node("generate_response", generate_response_node)
     workflow.add_node("end_interaction", end_interaction_node)
 
@@ -36,16 +36,16 @@ def create_auth_agent_graph():
     workflow.add_conditional_edges(
         "info_extraction",
         lambda state: (
-            "generate_response" if needs_more_info(state) else "authentication"
+            "generate_response" if needs_more_info(state) else "onboarding_complete"
         ),
-        {"generate_response": "generate_response", "authentication": "authentication"},
+        {"generate_response": "generate_response", "onboarding_complete": "onboarding_complete"},
     )
 
-    # From authentication
+    # From onboarding_complete
     workflow.add_conditional_edges(
-        "authentication",
+        "onboarding_complete",
         lambda state: (
-            "end_interaction" if is_authenticated(state) else "generate_response"
+            "end_interaction" if is_onboarded(state) else "generate_response"
         ),
         {
             "end_interaction": "end_interaction",
@@ -69,17 +69,17 @@ def create_auth_agent_graph():
 
 
 # Usage example
-async def run_auth_agent(user_input: Union[bytes, str]) -> AuthAgentState:
-    """Run the authentication agent with user input (no verification in this flow)"""
+async def run_onboarding_agent(user_input: Union[bytes, str]) -> OnboardingAgentState:
+    """Run the onboarding agent with user input"""
 
     # Create the graph
-    graph = create_auth_agent_graph()
+    graph = create_onboarding_agent_graph()
 
     # Initial state
-    initial_state = AuthAgentState(
+    initial_state = OnboardingAgentState(
         user_input=user_input,
         extracted_information={},
-        authentication_status="pending_info",
+        onboarding_status="pending_info",
         messages=[],
     )
 
@@ -89,19 +89,19 @@ async def run_auth_agent(user_input: Union[bytes, str]) -> AuthAgentState:
         return final_state
     except Exception as e:
         logging.error(f"Graph execution failed: {str(e)}")
-        return AuthAgentState(
+        return OnboardingAgentState(
             error=str(e),
-            system_response="An error occurred during authentication. Please try again.",
+            system_response="An error occurred during onboarding. Please try again.",
         )
 
 
 # For handling ongoing conversations (if needed)
-async def continue_auth_conversation(
-    current_state: AuthAgentState, new_input: Union[bytes, str]
-) -> AuthAgentState:
-    """Continue an ongoing authentication conversation (no verification in this flow)"""
+async def continue_onboarding_conversation(
+        current_state: OnboardingAgentState, new_input: Union[bytes, str]
+) -> OnboardingAgentState:
+    """Continue an ongoing onboarding conversation"""
 
-    graph = create_auth_agent_graph()
+    graph = create_onboarding_agent_graph()
     current_state["user_input"] = new_input
     final_state = await graph.ainvoke(current_state)
     return final_state

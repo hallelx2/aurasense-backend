@@ -38,7 +38,7 @@ class RateLimitMiddleware:
         if self.is_rate_limited(client_ip):
             response = JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                content={"detail": "Rate limit exceeded"}
+                content={"detail": "Rate limit exceeded"},
             )
             await response(scope, receive, send)
             return
@@ -56,7 +56,8 @@ class RateLimitMiddleware:
 
         # Clean old requests
         self.clients[client_ip] = [
-            req_time for req_time in self.clients[client_ip]
+            req_time
+            for req_time in self.clients[client_ip]
             if current_time - req_time < 60  # 1 minute window
         ]
 

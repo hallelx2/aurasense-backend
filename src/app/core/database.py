@@ -25,8 +25,7 @@ class Neo4jDatabase:
         """Connect to Neo4j database"""
         try:
             self.driver = GraphDatabase.driver(
-                settings.NEO4J_URI,
-                auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
+                settings.NEO4J_URI, auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD)
             )
             self.logger.info("Connected to Neo4j database")
         except Exception as e:

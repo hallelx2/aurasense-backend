@@ -11,5 +11,5 @@ __all__ = [
     "add_cors_middleware",
     "CustomCORSMiddleware",
     "LoggingMiddleware",
-    "RateLimitMiddleware"
+    "RateLimitMiddleware",
 ]

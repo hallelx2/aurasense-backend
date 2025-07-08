@@ -16,6 +16,7 @@ from datetime import datetime
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
@@ -23,16 +24,21 @@ class RegisterRequest(BaseModel):
     last_name: str
     username: str | None = None
 
+
 class AuthResponse(BaseModel):
     status: str
     message: str
     data: Dict[str, Any]
 
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
-@router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED
+)
 async def register_user(request: RegisterRequest):
     # Check if user exists
     if User.nodes.filter(email=request.email).all():
@@ -47,7 +53,8 @@ async def register_user(request: RegisterRequest):
         password_hash=password_hash,
         first_name=request.first_name,
         last_name=request.last_name,
-        username=request.username
+        username=request.username,
+        is_onboarded=False,  # Explicitly set onboarding status
     ).save()
     # Generate JWT
     token = security_manager.create_access_token({"sub": user.uid, "email": user.email})
@@ -60,16 +67,20 @@ async def register_user(request: RegisterRequest):
                 "email": user.email,
                 "first_name": user.first_name,
                 "last_name": user.last_name,
-                "username": user.username
+                "username": user.username,
+                "isOnboarded": getattr(user, "is_onboarded", False),
             },
-            "access_token": token
-        }
+            "access_token": token,
+        },
     )
+
 
 @router.post("/login", response_model=AuthResponse)
 async def login_user(request: LoginRequest):
     user = User.nodes.filter(email=request.email).first()
-    if not user or not security_manager.verify_password(request.password, user.password_hash):
+    if not user or not security_manager.verify_password(
+        request.password, user.password_hash
+    ):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = security_manager.create_access_token({"sub": user.uid, "email": user.email})
     return AuthResponse(
@@ -81,11 +92,13 @@ async def login_user(request: LoginRequest):
                 "email": user.email,
                 "first_name": user.first_name,
                 "last_name": user.last_name,
-                "username": user.username
+                "username": user.username,
+                "isOnboarded": getattr(user, "is_onboarded", False),
             },
-            "access_token": token
-        }
+            "access_token": token,
+        },
     )
+
 
 @router.post("/logout", response_model=AuthResponse)
 async def logout_user(Authorization: str = Header(...)):
@@ -94,7 +107,9 @@ async def logout_user(Authorization: str = Header(...)):
     """
     token = Authorization.replace("Bearer ", "")
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
         exp = payload.get("exp")
         if not exp:
             raise HTTPException(status_code=400, detail="Invalid token: no expiry")
@@ -105,8 +120,4 @@ async def logout_user(Authorization: str = Header(...)):
         raise HTTPException(status_code=401, detail="Token already expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
-    return AuthResponse(
-        status="success",
-        message="Logged out successfully",
-        data={}
-    )
+    return AuthResponse(status="success", message="Logged out successfully", data={})

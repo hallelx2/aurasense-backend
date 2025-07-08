@@ -16,7 +16,10 @@ from neomodel import (
 from datetime import datetime
 from src.app.models.relationships import OrderItemRel
 from src.app.core.config import settings
+
 config.DATABASE_URL = settings.DATABASE_URL
+
+
 class Order(StructuredNode):
     order_id: str = UniqueIdProperty()
     order_date: datetime = DateTimeProperty(default_now=True)

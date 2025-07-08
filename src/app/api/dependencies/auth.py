@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> Dict[str, Any]:
     """
     Get current authenticated user from token
     """
@@ -45,7 +47,9 @@ class AuthenticationRequired:
     def __init__(self, require_voice_auth: bool = False):
         self.require_voice_auth = require_voice_auth
 
-    async def __call__(self, credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
+    async def __call__(
+        self, credentials: HTTPAuthorizationCredentials = Depends(security)
+    ) -> Dict[str, Any]:
         """
         Authenticate user with optional voice verification
         """

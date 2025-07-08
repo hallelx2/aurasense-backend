@@ -24,8 +24,8 @@ def validate_phone(phone: str) -> bool:
     Validate phone number format
     """
     # Simple phone validation - can be enhanced with phonenumbers library
-    phone_pattern = re.compile(r'^\+?1?\d{9,15}$')
-    return bool(phone_pattern.match(phone.replace(' ', '').replace('-', '')))
+    phone_pattern = re.compile(r"^\+?1?\d{9,15}$")
+    return bool(phone_pattern.match(phone.replace(" ", "").replace("-", "")))
 
 
 def validate_location(location: Dict[str, Any]) -> bool:
@@ -35,12 +35,12 @@ def validate_location(location: Dict[str, Any]) -> bool:
     if not isinstance(location, dict):
         return False
 
-    if 'latitude' not in location or 'longitude' not in location:
+    if "latitude" not in location or "longitude" not in location:
         return False
 
     try:
-        lat = float(location['latitude'])
-        lon = float(location['longitude'])
+        lat = float(location["latitude"])
+        lon = float(location["longitude"])
 
         # Check valid coordinate ranges
         if -90 <= lat <= 90 and -180 <= lon <= 180:

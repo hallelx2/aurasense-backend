@@ -39,6 +39,18 @@ class UserInformation(BaseModel):
     is_tourist: Optional[bool] = Field(
         default=False, description="Whether user is a tourist"
     )
+    cultural_background: Optional[List[str]] = Field(
+        default=[], description="User's cultural background"
+    )
+    food_allergies: Optional[List[str]] = Field(
+        default=[], description="User's food allergies"
+    )
+    spice_tolerance: Optional[int] = Field(
+        None, ge=1, le=5, description="User's spice tolerance (1-5)"
+    )
+    preferred_languages: Optional[List[str]] = Field(
+        default=["en"], description="User's preferred languages"
+    )
 
     @field_validator("price_range")
     def validate_price_range(cls, v):
@@ -60,6 +72,10 @@ class UserInformation(BaseModel):
                 "cuisine_preferences": ["italian", "mediterranean"],
                 "price_range": "mid-range",
                 "is_tourist": True,
+                "cultural_background": ["italian", "american"],
+                "food_allergies": ["nuts", "shellfish"],
+                "spice_tolerance": 3,
+                "preferred_languages": ["en", "it"]
             }
         }
 
@@ -357,6 +373,49 @@ async def verify_voice_match(
     except Exception as e:
         print(f"Voice verification error: {str(e)}")
         return False
+
+
+async def save_user_to_graph_db(user_info: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Save the onboarded user to the graph database.
+    Args:
+        user_info: Dictionary containing all user onboarding information
+    Returns:
+        Dictionary with success status and message
+    """
+    try:
+        from src.app.models.user import User
+
+        # Find the user by email (assuming email is always present)
+        email = user_info.get("email")
+        if not email:
+            return {"success": False, "message": "Email is required to save user"}
+
+        user = User.nodes.filter(email=email).first()
+        if not user:
+            return {"success": False, "message": "User not found"}
+
+        # Update user with onboarding information
+        user.username = user_info.get("username", user.username)
+        user.phone = user_info.get("phone", user.phone)
+        user.age = user_info.get("age", user.age)
+        user.dietary_restrictions = user_info.get("dietary_restrictions", user.dietary_restrictions)
+        user.cuisine_preferences = user_info.get("cuisine_preferences", user.cuisine_preferences)
+        user.price_range = user_info.get("price_range", user.price_range)
+        user.is_tourist = user_info.get("is_tourist", user.is_tourist)
+
+        # Note: cultural_background, food_allergies, spice_tolerance, preferred_languages
+        # are not in the current User model - they would need to be added or stored separately
+
+        # Mark user as onboarded
+        user.is_onboarded = True
+
+        # Save to database
+        user.save()
+
+        return {"success": True, "message": "User onboarding completed and saved to graph DB"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
 
 
 # Testing functions

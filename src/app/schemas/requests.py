@@ -10,6 +10,7 @@ from datetime import date, datetime
 
 class VoiceProcessingRequest(BaseModel):
     """Voice processing request schema"""
+
     user_id: str
     session_id: Optional[str] = None
     audio_url: Optional[str] = None
@@ -19,6 +20,7 @@ class VoiceProcessingRequest(BaseModel):
 
 class OnboardingData(BaseModel):
     """User onboarding data schema"""
+
     email: str
     cultural_background: List[str] = []
     dietary_restrictions: List[str] = []
@@ -31,6 +33,7 @@ class OnboardingData(BaseModel):
 
 class AuthenticationRequest(BaseModel):
     """Authentication request schema"""
+
     user_id: str
     challenge_response: str
     audio_url: Optional[str] = None
@@ -39,6 +42,7 @@ class AuthenticationRequest(BaseModel):
 
 class LocationUpdateRequest(BaseModel):
     """Location update request schema"""
+
     user_id: str
     latitude: float
     longitude: float
@@ -48,6 +52,7 @@ class LocationUpdateRequest(BaseModel):
 
 class PreferenceUpdateRequest(BaseModel):
     """User preference update schema"""
+
     user_id: str
     preference_type: str
     preferences: Dict[str, Any]

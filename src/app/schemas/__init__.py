@@ -8,7 +8,7 @@ from .requests import (
     OnboardingData,
     AuthenticationRequest,
     LocationUpdateRequest,
-    PreferenceUpdateRequest
+    PreferenceUpdateRequest,
 )
 from .responses import (
     BaseResponse,
@@ -16,7 +16,7 @@ from .responses import (
     AuthenticationResponse,
     RecommendationResponse,
     OrderResponse,
-    SessionResponse
+    SessionResponse,
 )
 
 __all__ = [
@@ -30,5 +30,5 @@ __all__ = [
     "AuthenticationResponse",
     "RecommendationResponse",
     "OrderResponse",
-    "SessionResponse"
+    "SessionResponse",
 ]

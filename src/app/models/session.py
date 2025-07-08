@@ -8,10 +8,13 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 import uuid
 from src.app.core.config import settings
+
 config.DATABASE_URL = settings.DATABASE_URL
+
 
 class UserSession(BaseModel):
     """User session data model"""
+
     session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     is_authenticated: bool = False
@@ -27,6 +30,7 @@ class UserSession(BaseModel):
 
 class VoiceInteraction(BaseModel):
     """Voice interaction data model"""
+
     interaction_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     session_id: str
     user_id: str
@@ -44,6 +48,7 @@ class VoiceInteraction(BaseModel):
 
 class AudioSession(BaseModel):
     """Audio processing session model for alternative architecture"""
+
     session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     audio_url: str
@@ -58,6 +63,7 @@ class AudioSession(BaseModel):
 
 class AgentInteraction(BaseModel):
     """Agent interaction data model"""
+
     interaction_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     session_id: str
     user_id: str
@@ -75,6 +81,7 @@ class AgentInteraction(BaseModel):
 
 class VoiceAuthSession(BaseModel):
     """Voice authentication session"""
+
     auth_session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: Optional[str] = None
     challenge_sentence: str
