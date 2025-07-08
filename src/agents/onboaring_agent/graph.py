@@ -53,14 +53,8 @@ def create_onboarding_agent_graph():
         },
     )
 
-    # From generate_response - handle different scenarios
-    workflow.add_conditional_edges(
-        "generate_response",
-        lambda state: (
-            "transcription" if needs_more_info(state) else END
-        ),
-        {"transcription": "transcription", END: END},
-    )
+    # From generate_response - always END (wait for new user input)
+    workflow.add_edge("generate_response", END)
 
     # End interaction leads to END
     workflow.add_edge("end_interaction", END)
