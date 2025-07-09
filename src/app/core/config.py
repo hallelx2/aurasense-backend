@@ -7,13 +7,23 @@ class Settings:
     DEBUG = config("DEBUG", default=False, cast=bool)
     API_V1_STR = config("API_V1_STR", default="/api/v1")
     HOST = config("HOST", default="0.0.0.0")
-    PORT = config("PORT", default=8000, cast=int)
+    PORT = config("APP_PORT", default=8000, cast=int)
     LOG_LEVEL = config("LOG_LEVEL", default="INFO")
 
     ENVIRONMENT = config("ENVIRONMENT", default="development")
 
+    # CORS Configuration
+    CORS_ORIGINS = config(
+        "CORS_ORIGINS",
+        default="http://localhost:3000,http://localhost:8080,http://127.0.0.1:3000",
+        cast=Csv()
+    )
+    CORS_ALLOW_CREDENTIALS = config("CORS_ALLOW_CREDENTIALS", default=True, cast=bool)
+    CORS_ALLOW_METHODS = config("CORS_ALLOW_METHODS", default="*")
+    CORS_ALLOW_HEADERS = config("CORS_ALLOW_HEADERS", default="*")
+
     NEO4J_HOST = config("NEO4J_HOST", default="localhost")
-    NEO4J_PORT = config("NEO4J_PORT", default=7687, cast=int)
+    NEO4J_PORT = config("NEO4J_BOLT_PORT", default=7687, cast=int)
     NEO4J_URI = config("NEO4J_URI", default=f"bolt://{NEO4J_HOST}:{NEO4J_PORT}")
     NEO4J_USER = config("NEO4J_USER", default="neo4j")
     NEO4J_PASSWORD = config("NEO4J_PASSWORD", default="test1234")

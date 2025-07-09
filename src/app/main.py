@@ -114,7 +114,7 @@ async def log_requests(request: Request, call_next):
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "ws://localhost:3000"],  # Explicitly allow frontend origin
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
