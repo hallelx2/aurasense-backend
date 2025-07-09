@@ -1,4 +1,4 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, status, WebSocketException
 from fastapi.responses import JSONResponse
 from typing import Dict, Any
 import json
@@ -16,12 +16,24 @@ router = APIRouter()
 onboarding_sessions: Dict[str, OnboardingAgentState] = {}
 
 # Dummy authentication function (replace with real logic)
-async def get_current_user_from_token(token: str) -> User:
-    # TODO: Implement real token validation and user lookup
-    user = User.nodes.filter(uid=token).first()
-    if not user:
-        raise Exception("Invalid or expired token")
-    return user
+async def get_current_user_from_token(
+    websocket: WebSocket,
+    token: str | None = None,
+) -> User:
+    if token is None:
+        # Try to get token from query params if not passed directly
+        token = websocket.query_params.get("token")
+
+    if not token:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Missing token")
+
+    try:
+        user = User.nodes.filter(uid=token).first()
+        if not user:
+            raise Exception("Invalid or expired token")
+        return user
+    except Exception as e:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason=str(e))
 
 async def download_audio_from_url(audio_url: str) -> bytes:
     """Download audio from URL and return bytes"""
@@ -49,25 +61,20 @@ def map_onboarding_step_to_progress(step: str, is_complete: bool) -> Dict[str, A
     }
 
 @router.websocket("/ws/onboarding")
-async def onboarding_ws(websocket: WebSocket):
+async def onboarding_ws(websocket: WebSocket, token: str = Depends(get_current_user_from_token)):
     await websocket.accept()
-    user = None
+    user = token  # The user object is returned by the dependency
     session_id = str(uuid.uuid4())
 
-    try:
-        # Expect the first message to be an auth token
-        auth_msg = await websocket.receive_text()
-        auth_data = json.loads(auth_msg)
-        token = auth_data.get("token")
+    if not user:
+        await websocket.send_json({
+            "type": "error",
+            "payload": {"message": "Authentication failed."}
+        })
+        await websocket.close()
+        return
 
-        user = await get_current_user_from_token(token)
-        if not user:
-            await websocket.send_json({
-                "type": "error",
-                "payload": {"message": "Authentication failed."}
-            })
-            await websocket.close()
-            return
+    try:
 
         # Pre-populate with existing user data from sign-up
         existing_user_data = {

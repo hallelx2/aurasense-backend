@@ -32,4 +32,5 @@ dependencies = [
     "rich>=14.0.0",
     "scalar-fastapi>=1.0.3",
     "uvicorn>=0.35.0",
+    "websockets>=15.0.1",
 ]
