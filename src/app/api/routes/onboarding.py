@@ -15,6 +15,7 @@ from src.agents.onboaring_agent.llm import llm_qwen
 from src.app.models.user import User
 from src.app.api.dependencies.auth import get_current_user
 from src.app.services.memory_service import MemoryService
+from src.app.api.routes.auth import security_manager
 
 logger = logging.getLogger(__name__)
 
@@ -218,3 +219,49 @@ async def _update_user_profile(user: User, extracted_info: Dict[str, Any]) -> No
         
     except Exception as e:
         logger.error(f"Failed to update user profile: {e}")
+
+
+@router.post("/skip")
+async def skip_onboarding(current_user: User = Depends(get_current_user)):
+    """
+    Skip onboarding and mark user as onboarded
+    """
+    try:
+        # Mark user as onboarded
+        current_user.is_onboarded = True
+        current_user.save()
+        
+        # Create new JWT token with updated isOnboarded status
+        new_token = security_manager.create_access_token({
+            "sub": current_user.uid,
+            "email": current_user.email,
+            "isOnboarded": current_user.is_onboarded
+        })
+        
+        # Store in graph memory
+        await memory_service.store_user_memory(
+            current_user.uid,
+            {
+                "content": f"User {current_user.email} skipped onboarding process",
+                "metadata": {"action": "skip_onboarding"}
+            }
+        )
+        
+        return {
+            "status": "success",
+            "message": "Onboarding skipped successfully",
+            "user": {
+                "uid": current_user.uid,
+                "email": current_user.email,
+                "is_onboarded": current_user.is_onboarded,
+                "isOnboarded": current_user.is_onboarded,
+            },
+            "access_token": new_token
+        }
+        
+    except Exception as e:
+        logger.error(f"Error skipping onboarding: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to skip onboarding: {str(e)}"
+        )

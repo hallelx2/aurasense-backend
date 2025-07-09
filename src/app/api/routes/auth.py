@@ -74,7 +74,11 @@ async def register_user(request: RegisterRequest, http_request: Request):
         ).save()
 
         # Generate JWT
-        token = security_manager.create_access_token({"sub": user.uid, "email": user.email})
+        token = security_manager.create_access_token({
+            "sub": user.uid, 
+            "email": user.email,
+            "isOnboarded": getattr(user, "is_onboarded", False)
+        })
 
         # Store registration in memory
         await memory_service.store_user_registration(user)
@@ -133,7 +137,11 @@ async def login_user(request: LoginRequest, http_request: Request):
                 detail="Invalid email or password"
             )
 
-        token = security_manager.create_access_token({"sub": user.uid, "email": user.email})
+        token = security_manager.create_access_token({
+            "sub": user.uid, 
+            "email": user.email,
+            "isOnboarded": getattr(user, "is_onboarded", False)
+        })
 
         # Store login in memory
         await memory_service.store_user_login(user)

@@ -18,4 +18,5 @@ __all__ = [
     "food_router",
     "travel_router",
     "social_router",
+    "onboarding_ws_router",
 ]

@@ -15,7 +15,6 @@ router = APIRouter()
 # Track ongoing onboarding sessions
 onboarding_sessions: Dict[str, OnboardingAgentState] = {}
 
-# Dummy authentication function (replace with real logic)
 async def get_current_user_from_token(
     websocket: WebSocket,
     token: str | None = None,
@@ -28,9 +27,21 @@ async def get_current_user_from_token(
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Missing token")
 
     try:
-        user = User.nodes.filter(uid=token).first()
-        if not user:
+        # Verify the JWT token using the security manager
+        token_data = await security_manager.verify_token(token)
+        if not token_data:
             raise Exception("Invalid or expired token")
+        
+        # Get user ID from token payload
+        user_id = token_data.get("sub")
+        if not user_id:
+            raise Exception("Invalid token payload")
+        
+        # Find user by ID
+        user = User.nodes.filter(uid=user_id).first()
+        if not user:
+            raise Exception("User not found")
+        
         return user
     except Exception as e:
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason=str(e))
@@ -61,15 +72,28 @@ def map_onboarding_step_to_progress(step: str, is_complete: bool) -> Dict[str, A
     }
 
 @router.websocket("/ws/onboarding")
-async def onboarding_ws(websocket: WebSocket, token: str = Depends(get_current_user_from_token)):
+async def onboarding_ws(websocket: WebSocket):
     await websocket.accept()
-    user = token  # The user object is returned by the dependency
     session_id = str(uuid.uuid4())
-
-    if not user:
+    
+    try:
+        # Get user from token after accepting connection
+        user = await get_current_user_from_token(websocket)
+        print(f"WebSocket connected for user: {user.email if user else 'None'}")
+        
+        if not user:
+            print("No user found, closing connection")
+            await websocket.send_json({
+                "type": "error",
+                "payload": {"message": "Authentication failed."}
+            })
+            await websocket.close()
+            return
+    except WebSocketException as e:
+        print(f"Authentication error: {e.reason}")
         await websocket.send_json({
             "type": "error",
-            "payload": {"message": "Authentication failed."}
+            "payload": {"message": f"Authentication failed: {e.reason}"}
         })
         await websocket.close()
         return
@@ -90,16 +114,32 @@ async def onboarding_ws(websocket: WebSocket, token: str = Depends(get_current_u
             "is_tourist": getattr(user, "is_tourist", False),
         }
 
-        # Send personalized initial greeting
-        await websocket.send_json({
-            "type": "agent_message",
-            "payload": {
-                "id": str(uuid.uuid4()),
-                "sender": "agent",
-                "text": f"Hi {user.first_name}! Welcome to Aurasense onboarding. I'll help you personalize your experience by learning about your preferences and interests. Let's get started!",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        })
+        # Send initial onboarding status based on existing data
+        missing_fields = []
+        for field in ["age", "dietary_restrictions", "cuisine_preferences", "price_range", "is_tourist"]:
+            if not getattr(user, field, None):
+                missing_fields.append(field)
+        
+        if missing_fields:
+            await websocket.send_json({
+                "type": "agent_message",
+                "payload": {
+                    "id": str(uuid.uuid4()),
+                    "sender": "agent",
+                    "text": f"I need a few more details to personalize your experience. Let's start with your age - how old are you?",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            })
+        else:
+            await websocket.send_json({
+                "type": "agent_message",
+                "payload": {
+                    "id": str(uuid.uuid4()),
+                    "sender": "agent",
+                    "text": "Your profile looks complete! Is there anything specific you'd like to update or add?",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            })
 
         # Main loop: handle onboarding messages
         while True:
@@ -126,9 +166,7 @@ async def onboarding_ws(websocket: WebSocket, token: str = Depends(get_current_u
                         )
                     else:
                         # Start new conversation with existing user data
-                        final_state = await run_onboarding_agent(audio_bytes)
-                        # Pre-populate with existing user data
-                        final_state["extracted_information"] = existing_user_data
+                        final_state = await run_onboarding_agent(audio_bytes, existing_user_data)
 
                     # Store session state
                     onboarding_sessions[session_id] = final_state
@@ -188,11 +226,85 @@ async def onboarding_ws(websocket: WebSocket, token: str = Depends(get_current_u
                         "payload": {"message": f"Error processing audio: {str(e)}"}
                     })
 
+            elif msg_type == "user_message":
+                step = payload.get("step", "general")
+                text = payload.get("text", "")
+                timestamp = payload.get("timestamp", datetime.utcnow().isoformat())
+
+                try:
+                    # Process text message with onboarding agent
+                    if session_id in onboarding_sessions:
+                        # Continue existing conversation with text input
+                        final_state = await continue_onboarding_conversation(
+                            onboarding_sessions[session_id],
+                            text  # Pass text directly instead of audio_bytes
+                        )
+                    else:
+                        # Start new conversation with text input and existing user data
+                        final_state = await run_onboarding_agent(text, existing_user_data)
+
+                    # Store session state
+                    onboarding_sessions[session_id] = final_state
+
+                    # Get agent response
+                    agent_response = final_state.get("system_response", "I'm processing your information...")
+                    onboarding_status = final_state.get("onboarding_status", "pending_info")
+
+                    # Send agent message
+                    await websocket.send_json({
+                        "type": "agent_message",
+                        "payload": {
+                            "id": str(uuid.uuid4()),
+                            "sender": "agent",
+                            "text": agent_response,
+                            "timestamp": datetime.utcnow().isoformat()
+                        }
+                    })
+
+                    # Determine if step is complete
+                    is_step_complete = onboarding_status in ["ready", "onboarded"]
+
+                    # Send onboarding progress
+                    progress = map_onboarding_step_to_progress(step, is_step_complete)
+                    await websocket.send_json({
+                        "type": "onboarding_progress",
+                        "payload": progress
+                    })
+
+                    # If onboarding is complete, update user in database
+                    if onboarding_status == "onboarded":
+                        # Clean up session
+                        if session_id in onboarding_sessions:
+                            del onboarding_sessions[session_id]
+
+                        # Send completion message
+                        await websocket.send_json({
+                            "type": "agent_message",
+                            "payload": {
+                                "id": str(uuid.uuid4()),
+                                "sender": "agent",
+                                "text": f"Fantastic, {user.first_name}! Your personalization is complete. Aurasense is now tailored to your preferences and ready to provide you with amazing recommendations!",
+                                "timestamp": datetime.utcnow().isoformat()
+                            }
+                        })
+
+                        # Mark all steps as complete
+                        for step_key in ["dietaryPreferences", "restrictions", "allergies", "voiceSample", "communityInterests"]:
+                            await websocket.send_json({
+                                "type": "onboarding_progress",
+                                "payload": {"key": step_key, "value": True}
+                            })
+
+                except Exception as e:
+                    await websocket.send_json({
+                        "type": "error",
+                        "payload": {"message": f"Error processing text: {str(e)}"}
+                    })
+
             else:
-                await websocket.send_json({
-                    "type": "error",
-                    "payload": {"message": "Unknown message type."}
-                })
+                # Silently ignore unknown message types instead of sending error
+                print(f"Unknown message type received: {msg_type}")
+                pass
 
     except WebSocketDisconnect:
         # Clean up session on disconnect

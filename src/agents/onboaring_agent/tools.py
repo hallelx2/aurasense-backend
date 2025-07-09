@@ -15,6 +15,29 @@ from datetime import datetime
 # Import your LLM clients
 from .llm import stt_client, tts_client, llm_llama3, llm_deepseek, llm_qwen
 from src.app.core.config import settings
+import re
+
+
+def filter_thinking_tokens(text: str) -> str:
+    """Remove thinking tokens and reasoning from LLM responses"""
+    if not text:
+        return text
+    
+    # Remove content between <think> and </think> tags
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Remove content between <thinking> and </thinking> tags
+    text = re.sub(r'<thinking>.*?</thinking>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Remove any other reasoning patterns
+    text = re.sub(r'Let me think.*?(?=\n\n|\n[A-Z]|$)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'I need to.*?(?=\n\n|\n[A-Z]|$)', '', text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Clean up extra whitespace
+    text = re.sub(r'\n\s*\n', '\n', text)
+    text = text.strip()
+    
+    return text
 
 
 class UserInformation(BaseModel):
@@ -260,6 +283,12 @@ def extract_user_information(text: str) -> Dict[str, Any]:
         9. For tourist status, look for travel-related mentions
         10. For preferred languages, identify language codes or language names
         
+        NEGATIVE RESPONSES - VERY IMPORTANT:
+        - If user says "no", "none", "I don't have", "I dont think that I have", "I told you no", "noooooo", etc. for dietary restrictions, set dietary_restrictions to ["none"]
+        - If user says "no", "none", "I don't have", "I told you no", "noooooo", etc. for food allergies, set food_allergies to ["none"]
+        - If user says "no", "none", "I don't have", "I told you no", "noooooo", etc. for any list field, set that field to ["none"]
+        - Always interpret negative responses as ["none"], not empty lists or null values
+        
         Extract the information and provide the structured response directly. Do not include reasoning or thinking process.
         
         REQUIRED FIELDS TO EXTRACT:
@@ -270,14 +299,14 @@ def extract_user_information(text: str) -> Dict[str, Any]:
         - Phone number
         - Password
         - Age (numeric)
-        - Dietary restrictions (list)
-        - Cuisine preferences (list)
+        - Dietary restrictions (list) - use ["none"] for negative responses
+        - Cuisine preferences (list) - use ["none"] for negative responses
         - Price range preference (budget/mid-range/premium/luxury)
         - Whether they are a tourist (boolean)
-        - Cultural background (list)
-        - Food allergies (list)
+        - Cultural background (list) - use ["none"] for negative responses
+        - Food allergies (list) - use ["none"] for negative responses
         - Spice tolerance (1-5 scale)
-        - Preferred languages (list)
+        - Preferred languages (list) - use ["none"] for negative responses
         """
 
         # Use Qwen model with reasoning capabilities
@@ -298,6 +327,8 @@ def extract_user_information(text: str) -> Dict[str, Any]:
             if value is not None and value != [] and value != "":
                 filtered_result[key] = value
 
+        # Debug: print extracted information
+        print(f"DEBUG - Extracted information: {filtered_result}")
         return filtered_result
 
     except Exception as e:
@@ -559,8 +590,15 @@ async def get_user_onboarding_state(user_email: str) -> Dict[str, Any]:
         missing_fields = []
         for field in onboarding_fields:
             value = current_state.get(field)
+            # Consider field filled if it has a value, including ["none"]
             if value is None or (isinstance(value, list) and len(value) == 0):
                 missing_fields.append(field)
+            # If the field is ["none"], it's considered filled (user said no)
+            elif isinstance(value, list) and value == ["none"]:
+                continue  # Field is filled with "none" response
+        
+        print(f"DEBUG - Current state for {user_email}: {current_state}")
+        print(f"DEBUG - Missing fields for {user_email}: {missing_fields}")
         
         return {
             "success": True,
@@ -636,7 +674,9 @@ def generate_contextual_onboarding_question(missing_field: str, current_state: D
             """
             
             response = llm_qwen.invoke(context_prompt)
-            return response.content.strip()
+            # Filter out thinking tokens
+            filtered_response = filter_thinking_tokens(response.content)
+            return filtered_response.strip()
             
         except Exception as e:
             print(f"AI question generation failed: {e}")

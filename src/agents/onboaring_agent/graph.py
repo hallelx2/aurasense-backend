@@ -63,16 +63,16 @@ def create_onboarding_agent_graph():
 
 
 # Usage example
-async def run_onboarding_agent(user_input: Union[bytes, str]) -> OnboardingAgentState:
-    """Run the onboarding agent with user input"""
+async def run_onboarding_agent(user_input: Union[bytes, str], existing_user_data: dict = None) -> OnboardingAgentState:
+    """Run the onboarding agent with user input and existing user data"""
 
     # Create the graph
     graph = create_onboarding_agent_graph()
 
-    # Initial state
+    # Initial state with existing user data
     initial_state = OnboardingAgentState(
         user_input=user_input,
-        extracted_information={},
+        extracted_information=existing_user_data or {},
         onboarding_status="pending_info",
         messages=[],
     )

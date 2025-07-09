@@ -23,6 +23,7 @@ from .api.routes import (
     travel_router,
     social_router,
     auth_router,
+    onboarding_ws_router,
 )
 
 from scalar_fastapi import get_scalar_api_reference
@@ -113,7 +114,7 @@ async def log_requests(request: Request, call_next):
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "ws://localhost:3001"],  # Explicitly allow frontend origin
+    allow_origins=["http://localhost:3000", "ws://localhost:3000"],  # Explicitly allow frontend origin
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -126,6 +127,7 @@ app.include_router(onboarding_router, prefix=settings.API_V1_STR)
 app.include_router(food_router, prefix=settings.API_V1_STR)
 app.include_router(travel_router, prefix=settings.API_V1_STR)
 app.include_router(social_router, prefix=settings.API_V1_STR)
+app.include_router(onboarding_ws_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")

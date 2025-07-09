@@ -54,11 +54,31 @@ async def information_extraction_node(state: OnboardingAgentState) -> Onboarding
             current_info = state.get("extracted_information", {})
             current_info.update(extracted)
             state["extracted_information"] = current_info
+            
+            # Immediately save extracted information to database
+            user_email = current_info.get("email")
+            if user_email and extracted:
+                try:
+                    from src.app.models.user import User
+                    user = User.nodes.filter(email=user_email).first()
+                    if user:
+                        # Update user fields with extracted information
+                        for field, value in extracted.items():
+                            if hasattr(user, field) and value is not None:
+                                setattr(user, field, value)
+                        user.save()
+                        print(f"DEBUG - Saved extracted info to database: {extracted}")
+                except Exception as e:
+                    print(f"DEBUG - Error saving extracted info: {str(e)}")
+                    pass
 
             # Get user's current database state - THIS IS THE KEY CHANGE
             user_email = current_info.get("email")
             if user_email:
+                # Always refresh database state after saving new information
                 db_state = await get_user_onboarding_state(user_email)
+                print(f"DEBUG - Database state: {db_state}")
+                
                 if db_state.get("success"):
                     # Use database state to determine missing fields
                     missing_fields = db_state.get("missing_fields", [])
@@ -67,6 +87,9 @@ async def information_extraction_node(state: OnboardingAgentState) -> Onboarding
                     # Merge database state with current conversation state
                     merged_state = {**db_current_state, **current_info}
                     state["extracted_information"] = merged_state
+                    
+                    print(f"DEBUG - Missing fields: {missing_fields}")
+                    print(f"DEBUG - Merged state: {merged_state}")
                     
                     if not missing_fields:
                         state["onboarding_status"] = "ready"
