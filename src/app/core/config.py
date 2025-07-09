@@ -21,6 +21,12 @@ class Settings:
     CORS_ALLOW_CREDENTIALS = config("CORS_ALLOW_CREDENTIALS", default=True, cast=bool)
     CORS_ALLOW_METHODS = config("CORS_ALLOW_METHODS", default="*")
     CORS_ALLOW_HEADERS = config("CORS_ALLOW_HEADERS", default="*")
+    # CORS_ALLOW_METHODS = config("CORS_ALLOW_METHODS", default="GET,POST,PUT,DELETE,OPTIONS")
+    # CORS_ALLOW_HEADERS = config("CORS_ALLOW_HEADERS", default="Content-Type,Authorization,X-Requested-With,Accept,Origin,X-API-Key")
+
+    # Production domain configuration
+    PRODUCTION_DOMAIN = config("PRODUCTION_DOMAIN", default="")
+    FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
 
     NEO4J_HOST = config("NEO4J_HOST", default="localhost")
     NEO4J_PORT = config("NEO4J_BOLT_PORT", default=7687, cast=int)

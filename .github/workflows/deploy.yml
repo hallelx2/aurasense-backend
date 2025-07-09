@@ -1,0 +1,62 @@
+name: Deploy to Digital Ocean
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Add server to known hosts
+      run: |
+        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Deploy to server
+      run: |
+        ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "
+          # Navigate to project directory
+          cd /var/www/aurasense-backend
+
+          # Backup current deployment
+          cp -r . ../aurasense-backend_backup_$(date +%Y%m%d_%H%M%S) || true
+
+          # Pull latest changes
+          git fetch origin
+          git reset --hard origin/main
+
+          # Stop services
+          docker compose down || true
+
+          # Build and start
+          docker compose pull
+          docker compose build --no-cache
+          docker compose up -d
+
+          # Wait for services
+          sleep 30
+
+          # Health check
+          curl -f http://localhost:8000/health || exit 1
+
+          echo 'Deployment successful!'
+        "
+
+    - name: Notify deployment status
+      if: always()
+      run: |
+        if [ ${{ job.status }} == 'success' ]; then
+          echo "✅ Deployment successful!"
+        else
+          echo "❌ Deployment failed!"
+        fi
