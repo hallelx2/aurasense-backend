@@ -40,11 +40,11 @@ deploy: ## Deploy to production server
 	chmod +x scripts/deploy.sh
 	./scripts/deploy.sh $(ENV)
 
-deploy-setup: ## Setup server for first deployment
+deploy-setup: ## Setup server for first deployment (use OVERWRITE_NGINX=1 to force Nginx config overwrite)
 	@echo "🔧 Setting up server..."
 	chmod +x scripts/server-setup.sh
 	scp scripts/server-setup.sh $(SERVER_USER)@$(SERVER_HOST):/tmp/
-	ssh $(SERVER_USER)@$(SERVER_HOST) "chmod +x /tmp/server-setup.sh && /tmp/server-setup.sh"
+	ssh $(SERVER_USER)@$(SERVER_HOST) "chmod +x /tmp/server-setup.sh && OVERWRITE_NGINX=$(OVERWRITE_NGINX) /tmp/server-setup.sh"
 
 ssh: ## SSH into production server
 	@echo "🔗 Connecting to server..."
