@@ -20,19 +20,20 @@ class MCPService:
     async def check_restaurant_availability(self, restaurant_id: str) -> Dict[str, Any]:
         """Check restaurant availability via MCP"""
         # Implementation will be added
-        pass
+        # For now, return an empty dict to satisfy the return type
+        return {}
 
     async def get_menu_data(self, restaurant_id: str) -> Dict[str, Any]:
         """Get menu data via MCP"""
         # Implementation will be added
-        pass
+        return {}
 
     async def place_order(self, order_data: Dict[str, Any]) -> Dict[str, Any]:
         """Place order via MCP"""
         # Implementation will be added
-        pass
+        return {}
 
     async def process_payment(self, payment_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process payment via MCP"""
         # Implementation will be added
-        pass
+        return {}

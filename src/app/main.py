@@ -33,7 +33,7 @@ os.makedirs("logs", exist_ok=True)
 
 # Configure logging
 logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL.upper()),
+    level=getattr(logging, str(settings.LOG_LEVEL).upper()),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         # Console handler
