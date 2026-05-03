@@ -59,8 +59,5 @@ htmlcov/
 *.ogg
 *.flac
 
-# Docker
-.dockerignore
-
 # UV package manager
 .uv/

@@ -7,9 +7,11 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import uuid
-from src.app.core.config import settings
 
-config.DATABASE_URL = settings.DATABASE_URL
+# NOTE: Setting `neomodel.config.DATABASE_URL` belongs in the database
+# bootstrap (`src/app/core/database.py`), not in a model module. The previous
+# line here referenced an undefined `config` name and crashed the module on
+# import; it's been removed.
 
 
 class UserSession(BaseModel):

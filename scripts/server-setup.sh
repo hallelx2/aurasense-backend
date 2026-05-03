@@ -74,7 +74,8 @@ else
     ufw allow ssh
     ufw allow 80/tcp
     ufw allow 443/tcp
-    ufw allow 8000/tcp  # Your app port
+    # Backend listens on 127.0.0.1:8000 only; Nginx reverse-proxies it.
+    # We deliberately do NOT open 8000/tcp — that bypasses TLS and Nginx.
     echo "y" | ufw enable
 fi
 

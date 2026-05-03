@@ -1,10 +1,16 @@
-import os
-import json
-from langchain_groq import ChatGroq
+"""LLM client bindings for the onboarding agent.
+
+NOTE: This module is being kept minimal during Phase 0 for backward
+compatibility. In Phase 1 these direct client instantiations are replaced
+by the LLM gateway (`src.app.services.llm_gateway`) so models can be swapped
+per-role via env vars without touching agent code.
+"""
+
 from groq import Groq
-from langchain_anthropic import ChatAnthropic
+from langchain_groq import ChatGroq
+from rich import print  # noqa: F401  (used by the smoke test below)
+
 from src.app.core.config import settings
-from rich import print
 
 #######################
 # Large Language Models
@@ -25,11 +31,6 @@ llm_qwen = ChatGroq(
     api_key=settings.GROQ_API_KEY,
 )
 
-llm_claude = ChatAnthropic(
-    model="claude-3-5-sonnet-20240620",
-    api_key=settings.ANTHROPIC_API_KEY,
-)
-
 ####################################
 # Speech To Text (STT) Models
 ####################################
@@ -42,6 +43,5 @@ tts_client = Groq(api_key=settings.GROQ_API_KEY)
 
 
 if __name__ == "__main__":
-    user_input = "Hello, how are you?"
-    response = llm_claude.invoke(user_input)
+    response = llm_qwen.invoke("Hello, how are you?")
     print(response)

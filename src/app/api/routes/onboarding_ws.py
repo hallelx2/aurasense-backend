@@ -1,14 +1,25 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, status, WebSocketException
-from fastapi.responses import JSONResponse
-from typing import Dict, Any
 import json
-import requests
 import uuid
 from datetime import datetime
-from src.app.models.user import User
-from src.app.api.routes.auth import security_manager
-from src.agents.onboaring_agent.graph import run_onboarding_agent, continue_onboarding_conversation
+from typing import Any, Dict
+
+import aiohttp
+from fastapi import (
+    APIRouter,
+    WebSocket,
+    WebSocketDisconnect,
+    WebSocketException,
+    status,
+)
+
+from src.agents.onboaring_agent.graph import (
+    continue_onboarding_conversation,
+    run_onboarding_agent,
+)
 from src.agents.onboaring_agent.state import OnboardingAgentState
+from src.app.api.routes.auth import security_manager
+from src.app.core.config import settings
+from src.app.models.user import User
 
 router = APIRouter()
 
@@ -47,13 +58,31 @@ async def get_current_user_from_token(
         raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason=str(e))
 
 async def download_audio_from_url(audio_url: str) -> bytes:
-    """Download audio from URL and return bytes"""
+    """Download audio from URL and return bytes (non-blocking).
+
+    The caller is on the asyncio event loop; using `requests.get` here would
+    stall every other in-flight WS connection on the same worker. We use
+    `aiohttp` with a bounded timeout and a max-size guard so a hostile or
+    runaway URL cannot exhaust memory.
+    """
+    max_bytes = settings.MAX_AUDIO_FILE_SIZE_MB * 1024 * 1024
+    timeout = aiohttp.ClientTimeout(total=settings.AUDIO_PROCESSING_TIMEOUT)
+
     try:
-        response = requests.get(audio_url)
-        response.raise_for_status()
-        return response.content
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(audio_url) as response:
+                response.raise_for_status()
+                # Read in chunks so we can short-circuit on oversize.
+                buffer = bytearray()
+                async for chunk in response.content.iter_chunked(64 * 1024):
+                    buffer.extend(chunk)
+                    if len(buffer) > max_bytes:
+                        raise ValueError(
+                            f"Audio exceeds {settings.MAX_AUDIO_FILE_SIZE_MB} MB limit"
+                        )
+                return bytes(buffer)
     except Exception as e:
-        raise Exception(f"Failed to download audio: {str(e)}")
+        raise Exception(f"Failed to download audio: {e}") from e
 
 def map_onboarding_step_to_progress(step: str, is_complete: bool) -> Dict[str, Any]:
     """Map onboarding step to progress key for frontend"""

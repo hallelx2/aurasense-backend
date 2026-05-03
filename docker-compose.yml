@@ -45,7 +45,8 @@ services:
     ports:
       - "${GRAPHITI_PORT:-8080}:8080"
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - HOST=0.0.0.0
       - PORT=8080
@@ -74,14 +75,18 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: aurasense-backend
+    # Bind to loopback only: Nginx is the public path on the prod server
+    # (see scripts/server-setup.sh). Use BACKEND_BIND=0.0.0.0 to expose
+    # directly during local LAN testing.
     ports:
-      - "${PORT:-8000}:8000"
+      - "${BACKEND_BIND:-127.0.0.1}:${PORT:-8000}:8000"
     depends_on:
       - neo4j
       - redis
       - graphiti
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - NEO4J_HOST=neo4j
       - NEO4J_URI=bolt://neo4j:7687
