@@ -39,6 +39,16 @@ _MODULES = [
     "src.agents.onboarding_agent.agent",
     # Phase-1.5 polish:
     "src.app.core.logging",
+    # Phase-3 additions:
+    "src.agents.profile_agent",
+    "src.agents.profile_agent.snapshot",
+    "src.agents.profile_agent.state",
+    "src.agents.profile_agent.graph",
+    "src.agents.profile_agent.agent",
+    "src.app.services.profile_service",
+    "src.app.services.social_service",
+    "src.app.services.travel_service",
+    "src.app.api.routes.users",
 ]
 
 
