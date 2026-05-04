@@ -76,6 +76,18 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
+    # ----------------------------------------------------- MCP / food data
+    # Which restaurant-data provider the food agent uses.
+    #   "mock"        — bundled 12-dish catalog (best for testing the
+    #                   allergy-safety flow because it has explicit
+    #                   ingredient lists; default).
+    #   "foursquare"  — real restaurants via Foursquare Places API v3.
+    #                   Requires FOURSQUARE_API_KEY. Returns restaurant
+    #                   discovery only (no per-dish ingredients), so
+    #                   allergy filtering is weaker.
+    MCP_PROVIDER: str = "mock"
+    FOURSQUARE_BASE_URL: str = "https://api.foursquare.com/v3"
+
     # -------------------------------------------------------- Cloud storage
     CLOUD_STORAGE_PROVIDER: str = "aws"
     AWS_ACCESS_KEY_ID: str = ""
@@ -198,6 +210,24 @@ class Settings(BaseSettings):
     def _compute_neo4j_uri(self) -> "Settings":
         if not self.NEO4J_URI:
             self.NEO4J_URI = f"bolt://{self.NEO4J_HOST}:{self.NEO4J_PORT}"
+        return self
+
+    @model_validator(mode="after")
+    def _validate_mcp_provider(self) -> "Settings":
+        """Catch MCP_PROVIDER misconfiguration at boot, not at first request."""
+        provider = (self.MCP_PROVIDER or "").lower()
+        known = {"mock", "foursquare"}
+        if provider not in known:
+            raise RuntimeError(
+                f"MCP_PROVIDER={self.MCP_PROVIDER!r} is invalid; "
+                f"choose one of {sorted(known)}"
+            )
+        if provider == "foursquare" and not self.FOURSQUARE_API_KEY:
+            raise RuntimeError(
+                "MCP_PROVIDER=foursquare but FOURSQUARE_API_KEY is empty. "
+                "Get one at https://location.foursquare.com/developer/ and "
+                "add it to .env."
+            )
         return self
 
     @model_validator(mode="after")

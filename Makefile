@@ -67,9 +67,12 @@ smoke-phase-4: ## Phase-4 acceptance: Food agent + supervisor + /ws/agent + REST
 	@echo "🧪 Phase-4 smoke: full unit suite (incl. allergy filter)..."
 	uv run pytest -q
 	@echo "🍽️  Verifying food agent + supervisor + mcp service compile cleanly..."
-	@uv run python -c "import os; os.environ.update({'ENVIRONMENT':'development','SECRET_KEY':'t','GROQ_API_KEY':'t','NEO4J_PASSWORD':'t','GEMINI_API_KEY':'t','REDIS_URL':'redis://localhost:6379'}); from src.agents.food_agent import food_agent, RecommendationList; from src.app.services.mcp_service import mcp_service; print('food agent name:', food_agent.name); print('schema fields:', list(RecommendationList.model_fields.keys())); print('mock catalog size:', len(__import__('src.app.services.mcp_service', fromlist=['_MOCK_CATALOG'])._MOCK_CATALOG))"
+	@uv run python -c "import os; os.environ.update({'ENVIRONMENT':'development','SECRET_KEY':'t','GROQ_API_KEY':'t','NEO4J_PASSWORD':'t','GEMINI_API_KEY':'t','REDIS_URL':'redis://localhost:6379'}); from src.agents.food_agent import food_agent, RecommendationList; from src.app.services.mcp_service import mcp_service; from src.app.services.mcp_providers import mock as m; print('food agent name:', food_agent.name); print('schema fields:', list(RecommendationList.model_fields.keys())); print('mock catalog size:', len(m._CATALOG))"
 	@echo "🛣️  Verifying /ws/agent + REST food routes registered..."
 	@uv run python -c "import os; os.environ.update({'ENVIRONMENT':'development','SECRET_KEY':'t','GROQ_API_KEY':'t','NEO4J_PASSWORD':'t','GEMINI_API_KEY':'t'}); from src.app.main import app; paths = [r.path for r in app.routes if hasattr(r, 'path')]; required = ['/api/v1/ws/agent', '/api/v1/food/restaurants', '/api/v1/food/restaurants/{restaurant_id}', '/api/v1/food/orders']; missing = [p for p in required if p not in paths]; assert not missing, f'missing routes: {missing}'; print('all phase-4 routes registered')"
+	@echo "🔀 Verifying MCP provider dispatch (mock vs foursquare)..."
+	@uv run python -c "import os; os.environ.update({'ENVIRONMENT':'development','SECRET_KEY':'t','GROQ_API_KEY':'t','NEO4J_PASSWORD':'t','GEMINI_API_KEY':'t','MCP_PROVIDER':'mock'}); from src.app.services.mcp_service import mcp_service; assert mcp_service.provider == 'mock'; print('mock dispatch OK')"
+	@uv run python -c "import os; os.environ.update({'ENVIRONMENT':'development','SECRET_KEY':'t','GROQ_API_KEY':'t','NEO4J_PASSWORD':'t','GEMINI_API_KEY':'t','MCP_PROVIDER':'foursquare','FOURSQUARE_API_KEY':'fsq-test'}); from src.app.services.mcp_service import mcp_service; assert mcp_service.provider == 'foursquare'; print('foursquare dispatch OK')"
 	@echo "🐳 Validating docker-compose syntax..."
 	docker compose config -q
 	@echo "✅ Phase-4 smoke passed."
