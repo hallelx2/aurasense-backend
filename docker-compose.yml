@@ -28,7 +28,11 @@ services:
       start_period: 40s
 
   redis:
-    image: redis:7.2-alpine
+    # Redis Stack ships RedisSearch + RedisJSON, both of which are required
+    # by the LangGraph Redis checkpointer (`langgraph-checkpoint-redis` →
+    # `redisvl`). The basic `redis:7-alpine` image will fail at
+    # `AsyncRedisSaver.asetup()` because it can't create FT.* indexes.
+    image: redis/redis-stack-server:7.4.0-v0
     container_name: redis
     ports:
       - "6379:6379"
@@ -37,7 +41,16 @@ services:
     networks:
       - aurasense-network
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    environment:
+      # Persist to disk for dev (otherwise the JWT blacklist + LangGraph
+      # checkpoints don't survive container restarts).
+      - REDIS_ARGS=--appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   graphiti:
     image: zepai/graphiti:latest
