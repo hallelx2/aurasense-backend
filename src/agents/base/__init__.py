@@ -8,7 +8,12 @@ helpers in :mod:`collaboration`.
 """
 
 from .agent import BaseAgent
-from .checkpointer import get_redis_saver, get_async_redis_saver
+from .checkpointer import (
+    get_async_redis_saver,
+    get_redis_saver,
+    reset_checkpointer_cache,
+    setup_checkpointer_indexes,
+)
 from .collaboration import (
     MAX_HANDOFFS_PER_TURN,
     handoff_trail,
@@ -24,4 +29,6 @@ __all__ = [
     "get_redis_saver",
     "handoff_trail",
     "request_handoff",
+    "reset_checkpointer_cache",
+    "setup_checkpointer_indexes",
 ]

@@ -2,43 +2,61 @@
 LangGraph checkpointer factory.
 
 Every compiled graph in the system uses the same Redis-backed checkpointer
-so conversations survive restarts and scale across workers. The async
-variant is the default; the sync ``RedisSaver`` is exposed for code paths
-(e.g. unit tests, scripts) that don't run inside an event loop.
+so conversations survive restarts and scale across workers.
 
-Both factories are ``lru_cache``-d so the underlying connection pool is
-shared rather than rebuilt per agent.
+``langgraph-checkpoint-redis`` exposes both ``RedisSaver`` and
+``AsyncRedisSaver``. ``from_conn_string`` returns a context manager (for
+auto-cleanup); we instead construct the savers directly via their
+``__init__(redis_url=...)`` so we can share a single instance across the
+process and own its lifecycle in the FastAPI lifespan.
+
+Index/key creation is one-shot: call :func:`setup_checkpointer_indexes`
+once at app startup (from the lifespan handler).
 """
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 
 from langgraph.checkpoint.redis import AsyncRedisSaver, RedisSaver
 
 from src.app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
 
 @lru_cache(maxsize=1)
 def get_redis_saver() -> RedisSaver:
-    """Return the shared sync RedisSaver instance."""
-    saver = RedisSaver.from_conn_string(settings.REDIS_URL)
-    # `RedisSaver.from_conn_string` returns a context manager in some
-    # versions; normalize to the saver itself.
-    if hasattr(saver, "__enter__") and not hasattr(saver, "put"):
-        saver = saver.__enter__()
-    return saver
+    """Return the shared sync :class:`RedisSaver` (constructed lazily)."""
+    return RedisSaver(redis_url=settings.REDIS_URL)
 
 
 @lru_cache(maxsize=1)
 def get_async_redis_saver() -> AsyncRedisSaver:
-    """Return the shared async AsyncRedisSaver instance."""
-    saver = AsyncRedisSaver.from_conn_string(settings.REDIS_URL)
-    if hasattr(saver, "__aenter__") and not hasattr(saver, "aput"):
-        # Defer entering the context to the caller; we just return the
-        # raw AsyncRedisSaver. Most LangGraph code paths accept it as-is.
-        pass
-    return saver
+    """Return the shared :class:`AsyncRedisSaver` (constructed lazily)."""
+    return AsyncRedisSaver(redis_url=settings.REDIS_URL)
+
+
+async def setup_checkpointer_indexes() -> None:
+    """One-time index creation for the Redis-backed checkpointer.
+
+    Safe to call repeatedly — Redis index creation is idempotent. Call
+    from the FastAPI lifespan startup hook.
+    """
+    saver = get_async_redis_saver()
+    if hasattr(saver, "asetup"):
+        try:
+            await saver.asetup()
+            logger.info("AsyncRedisSaver indexes created/verified")
+        except Exception:  # pragma: no cover  - logged but non-fatal at boot
+            logger.exception("AsyncRedisSaver setup failed")
+    elif hasattr(saver, "create_indexes"):
+        try:
+            saver.create_indexes()
+            logger.info("RedisSaver indexes created/verified")
+        except Exception:  # pragma: no cover
+            logger.exception("RedisSaver index setup failed")
 
 
 def reset_checkpointer_cache() -> None:

@@ -13,6 +13,8 @@ import uuid
 from datetime import datetime
 from contextlib import asynccontextmanager
 
+from src.agents.base import setup_checkpointer_indexes
+
 from .core.config import settings
 from .core.database import neo4j_db, redis_cache
 from .services.memory_service import memory_service
@@ -60,6 +62,8 @@ async def lifespan(app: FastAPI):
         await neo4j_db.connect()
         await redis_cache.connect()
         logger.info("Database connections established")
+        # Initialize LangGraph checkpointer indexes (idempotent).
+        await setup_checkpointer_indexes()
     except Exception as e:
         logger.error(f"Failed to establish database connections: {str(e)}", exc_info=True)
         raise
