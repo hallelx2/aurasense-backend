@@ -63,6 +63,17 @@ smoke-phase-2: ## Phase-2 acceptance: Graphiti SDK in-process + entity types + r
 	fi
 	@echo "✅ Phase-2 smoke passed."
 
+smoke-phase-3: ## Phase-3 acceptance: Profile agent + UserContextSnapshot + /users/me/context route
+	@echo "🧪 Phase-3 smoke: full unit suite..."
+	uv run pytest -q
+	@echo "🧑 Verifying profile_agent + service compile cleanly..."
+	@uv run python -c "import os; os.environ.update({'ENVIRONMENT':'development','SECRET_KEY':'t','GROQ_API_KEY':'t','NEO4J_PASSWORD':'t','GEMINI_API_KEY':'t','REDIS_URL':'redis://localhost:6379'}); from src.agents.profile_agent import profile_agent, UserContextSnapshot; from src.app.services.profile_service import profile_service; from src.app.services.social_service import social_service; from src.app.services.travel_service import travel_service; print('profile agent name:', profile_agent.name); print('snapshot import OK'); print('services:', type(profile_service).__name__, type(social_service).__name__, type(travel_service).__name__)"
+	@echo "🛣️  Verifying /users/me/context route is registered..."
+	@uv run python -c "import os; os.environ.update({'ENVIRONMENT':'development','SECRET_KEY':'t','GROQ_API_KEY':'t','NEO4J_PASSWORD':'t','GEMINI_API_KEY':'t'}); from src.app.main import app; paths = [r.path for r in app.routes if hasattr(r, 'path')]; assert '/api/v1/users/me/context' in paths, f'/users/me/context missing; got {paths}'; print('users route registered:', '/api/v1/users/me/context' in paths)"
+	@echo "🐳 Validating docker-compose syntax..."
+	docker compose config -q
+	@echo "✅ Phase-3 smoke passed."
+
 deploy: ## Deploy to production server
 	@echo "🚀 Deploying to $(ENV) environment..."
 	chmod +x scripts/deploy.sh

@@ -27,6 +27,7 @@ from .api.routes import (
     social_router,
     auth_router,
     onboarding_ws_router,
+    users_router,
 )
 
 from scalar_fastapi import get_scalar_api_reference
@@ -128,6 +129,7 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(auth_router, prefix=settings.API_V1_STR)
+app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(voice_router, prefix=settings.API_V1_STR)
 app.include_router(food_router, prefix=settings.API_V1_STR)
 app.include_router(travel_router, prefix=settings.API_V1_STR)
