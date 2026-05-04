@@ -13,9 +13,9 @@ help: ## Show this help message
 	@echo "Available commands:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-install: ## Install dependencies locally
-	@echo "🔧 Installing dependencies..."
-	pip install -r requirements.txt
+install: ## Install dependencies locally (uv-managed)
+	@echo "🔧 Installing dependencies via uv..."
+	uv sync --group dev
 
 dev: ## Start development environment
 	@echo "🚀 Starting development environment..."
@@ -25,7 +25,7 @@ dev-local: ## Run backend locally (with Docker databases)
 	@echo "🚀 Starting databases only..."
 	docker compose up neo4j redis graphiti -d
 	@echo "🐍 Starting backend locally..."
-	python -m uvicorn src.app.main:app --reload --host 0.0.0.0 --port 8000
+	uv run uvicorn src.app.main:app --reload --host 0.0.0.0 --port 8000
 
 build: ## Build Docker images
 	@echo "🏗️ Building Docker images..."
@@ -33,7 +33,14 @@ build: ## Build Docker images
 
 test: ## Run tests
 	@echo "🧪 Running tests..."
-	pytest tests/
+	uv run pytest -q
+
+smoke-phase-0: ## Phase-0 acceptance: import + settings + production-refusal
+	@echo "🧪 Phase-0 smoke: import, settings, prod-default refusal..."
+	uv run pytest -q tests/test_imports.py
+	@echo "🐳 Validating docker-compose syntax..."
+	docker compose config -q
+	@echo "✅ Phase-0 smoke passed."
 
 deploy: ## Deploy to production server
 	@echo "🚀 Deploying to $(ENV) environment..."

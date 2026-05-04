@@ -1,0 +1,74 @@
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Local secrets / env (must NEVER ship in the image)
+.env
+.env.*
+!.env.example
+
+# Python build artifacts & caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Project-specific noise we don't want in the image
+tests/
+docs/
+scripts/
+*.md
+!README.md
+.github/
+logs/
+*.log
+*.wav
+*.mp3
+*.m4a
+*.ogg
+
+# Lockfiles & local debug artifacts
+.cursorrules
+*.local
