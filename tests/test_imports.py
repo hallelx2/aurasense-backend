@@ -63,6 +63,10 @@ _MODULES = [
     "src.agents.supervisor.nodes",
     "src.agents.supervisor.graph",
     "src.app.api.routes.agent_ws",
+    # Phase-4.5 additions:
+    "src.app.services.mcp_providers",
+    "src.app.services.mcp_providers.mock",
+    "src.app.services.mcp_providers.foursquare",
 ]
 
 
