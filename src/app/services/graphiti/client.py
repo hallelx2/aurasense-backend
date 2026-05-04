@@ -29,6 +29,7 @@ from functools import lru_cache
 from typing import Optional
 
 from graphiti_core import Graphiti
+from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.embedder import OpenAIEmbedder
 from graphiti_core.embedder.openai import OpenAIEmbedderConfig
 from graphiti_core.llm_client import LLMConfig, OpenAIClient
@@ -75,6 +76,28 @@ def _build_llm_client() -> OpenAIClient:
         max_tokens=8192,
     )
     return OpenAIClient(config=config)
+
+
+def _build_cross_encoder() -> OpenAIRerankerClient:
+    """Build the search-result reranker.
+
+    Graphiti's default reranker is OpenAI-only and crashes on import if
+    `OPENAI_API_KEY` is empty (as is the case when the user picks Gemini
+    or Groq+OpenAI-embed). We side-step that by constructing the
+    reranker explicitly with the SAME LLM config the agent extractor
+    uses — every supported provider exposes chat completions, which is
+    all the reranker needs.
+    """
+    provider = settings.GRAPHITI_LLM_PROVIDER.lower()
+    api_key, base_url = _llm_credentials_for(provider)
+    config = LLMConfig(
+        api_key=api_key,
+        # Reranker uses a smaller model when available; reuse the main
+        # one if no small alternative is configured.
+        model=settings.GRAPHITI_LLM_MODEL,
+        base_url=base_url,
+    )
+    return OpenAIRerankerClient(config=config)
 
 
 def _build_embedder() -> OpenAIEmbedder:
@@ -136,12 +159,14 @@ def get_graphiti() -> Graphiti:
     """
     llm_client = _build_llm_client()
     embedder = _build_embedder()
+    cross_encoder = _build_cross_encoder()
     g = Graphiti(
         uri=settings.NEO4J_URI,
         user=settings.NEO4J_USER,
         password=settings.NEO4J_PASSWORD,
         llm_client=llm_client,
         embedder=embedder,
+        cross_encoder=cross_encoder,
     )
     logger.info(
         "Graphiti SDK initialized: llm=%s:%s embedder=%s:%s (dim=%d)",

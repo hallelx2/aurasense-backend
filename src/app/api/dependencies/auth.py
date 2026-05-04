@@ -3,10 +3,13 @@ Authentication Dependencies
 FastAPI dependency injection for authentication
 """
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Optional, Dict, Any
 import logging
+from typing import Any, Dict, Optional, Tuple
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from src.app.core.database import run_in_thread
 from src.app.core.security import security_manager
 from src.app.models.user import User
 
@@ -15,75 +18,52 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 
+def _unauthorized(detail: str = "Could not validate credentials") -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+async def _resolve_user_from_token(token: str) -> User:
+    """Verify a JWT and load the matching User from Neo4j (off the event loop).
+
+    `neomodel` is sync; we push the lookup into a thread so a slow Neo4j
+    response doesn't stall every other in-flight async request on the
+    same worker.
+    """
+    payload = await security_manager.verify_token(token)
+    if not payload:
+        raise _unauthorized()
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise _unauthorized()
+
+    user = await run_in_thread(User.nodes.filter(uid=user_id).first)
+    if not user:
+        raise _unauthorized("User not found")
+    return user
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> User:
-    """
-    Get current authenticated user from token
-    """
+    """Resolve the authenticated user from the bearer token."""
     token = credentials.credentials
-    payload = await security_manager.verify_token(token)
-    
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    user = User.nodes.filter(uid=user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Store token in user object for logout functionality
+    user = await _resolve_user_from_token(token)
+    # Stash the token on the user object so /logout can blacklist it.
     user._current_token = token
     return user
 
 
 async def get_current_user_with_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> tuple[User, str]:
-    """
-    Get current authenticated user with the token
-    """
+) -> Tuple[User, str]:
+    """Same as `get_current_user` but also returns the raw token."""
     token = credentials.credentials
-    payload = await security_manager.verify_token(token)
-    
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    user = User.nodes.filter(uid=user_id).first()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
+    user = await _resolve_user_from_token(token)
     return user, token
 
 

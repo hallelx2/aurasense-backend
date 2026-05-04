@@ -32,6 +32,7 @@ from src.agents.onboarding_agent.state import OnboardingAgentState
 from src.agents.onboarding_agent.tools import transcribe_audio
 from src.app.api.routes.auth import security_manager
 from src.app.core.config import settings
+from src.app.core.database import run_in_thread
 from src.app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,9 @@ async def get_current_user_from_token(
         if not user_id:
             raise Exception("Invalid token payload")
 
-        user = User.nodes.filter(uid=user_id).first()
+        # neomodel is sync; push to a thread so the WS event loop isn't
+        # blocked while Neo4j answers.
+        user = await run_in_thread(User.nodes.filter(uid=user_id).first)
         if not user:
             raise Exception("User not found")
 

@@ -3,21 +3,22 @@ Main Application
 FastAPI application setup and configuration
 """
 
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import logging
-from logging.handlers import RotatingFileHandler
 import os
 import uuid
-from datetime import datetime
 from contextlib import asynccontextmanager
+from datetime import datetime
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from src.agents.base import setup_checkpointer_indexes
 from src.app.services.graphiti import close_graphiti, setup_graphiti
 
 from .core.config import settings
 from .core.database import neo4j_db, redis_cache
+from .core.logging import configure_logging, request_id_var
 from .services.memory_service import memory_service
 from .api.routes import (
     voice_router,
@@ -30,27 +31,14 @@ from .api.routes import (
 
 from scalar_fastapi import get_scalar_api_reference
 
-# Create logs directory if it doesn't exist
-os.makedirs("logs", exist_ok=True)
-
-# Configure logging
-logging.basicConfig(
-    level=getattr(logging, str(settings.LOG_LEVEL).upper()),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        # Console handler
-        logging.StreamHandler(),
-        # File handler with rotation
-        RotatingFileHandler(
-            'logs/app.log',
-            maxBytes=10*1024*1024,  # 10MB
-            backupCount=5,
-            encoding='utf-8'
-        )
-    ]
+# Configure structured (JSON-by-default) logging. Use `LOG_FORMAT=text`
+# in dev for human-readable lines.
+configure_logging(
+    level=str(settings.LOG_LEVEL).upper(),
+    fmt=os.getenv("LOG_FORMAT", "json"),
+    log_dir="logs",
+    log_file="app.log",
 )
-
-# Get logger for this module
 logger = logging.getLogger(__name__)
 
 
@@ -97,28 +85,36 @@ app = FastAPI(
 )
 
 
-# Request logging middleware
+# Request logging middleware — sets the per-request correlation id on a
+# ContextVar so structured log records pick it up automatically.
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    # Generate request ID
-    request_id = request.headers.get('X-Request-ID', str(uuid.uuid4()))
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    token = request_id_var.set(request_id)
+    request.state.request_id = request_id
 
-    # Log request
-    logger.info(f"Request {request_id}: {request.method} {request.url}")
-    logger.debug(f"Request {request_id} headers: {dict(request.headers)}")
-
-    # Get response
-    start_time = datetime.now()
-    response = await call_next(request)
-    duration = (datetime.now() - start_time).total_seconds()
-
-    # Log response
-    logger.info(
-        f"Response {request_id}: Status {response.status_code}, "
-        f"Duration: {duration:.3f}s"
-    )
-
-    return response
+    start = datetime.utcnow()
+    try:
+        logger.info(
+            "request.start",
+            extra={"method": request.method, "path": request.url.path},
+        )
+        response = await call_next(request)
+        duration = (datetime.utcnow() - start).total_seconds()
+        logger.info(
+            "request.end",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_s": round(duration, 4),
+            },
+        )
+        # Echo the request id back so clients can correlate too.
+        response.headers["X-Request-ID"] = request_id
+        return response
+    finally:
+        request_id_var.reset(token)
 
 
 # Add CORS middleware
