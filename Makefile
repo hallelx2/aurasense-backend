@@ -42,6 +42,15 @@ smoke-phase-0: ## Phase-0 acceptance: import + settings + production-refusal
 	docker compose config -q
 	@echo "✅ Phase-0 smoke passed."
 
+smoke-phase-1: ## Phase-1 acceptance: foundation + onboarding-on-BaseAgent
+	@echo "🧪 Phase-1 smoke: full unit suite + main app import..."
+	uv run pytest -q
+	@echo "🔌 Verifying main.py + WS route load cleanly..."
+	@uv run python -c "import os; os.environ.update({'ENVIRONMENT':'development','SECRET_KEY':'t','GROQ_API_KEY':'t','NEO4J_PASSWORD':'t'}); import src.app.main; print('main app routes:', len(src.app.main.app.routes))"
+	@echo "🐳 Validating docker-compose syntax..."
+	docker compose config -q
+	@echo "✅ Phase-1 smoke passed."
+
 deploy: ## Deploy to production server
 	@echo "🚀 Deploying to $(ENV) environment..."
 	chmod +x scripts/deploy.sh

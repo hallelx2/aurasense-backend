@@ -9,6 +9,10 @@ from typing import Dict, Any
 from src.app.models.user import User
 from src.app.core.security import security_manager
 from src.app.api.dependencies.auth import get_current_user, get_current_user_with_token
+from src.app.api.middleware.rate_limit import (
+    auth_login_limiter,
+    auth_register_limiter,
+)
 from src.app.services.memory_service import memory_service
 from neomodel import db
 from src.app.core.database import redis_cache
@@ -45,7 +49,10 @@ class LoginRequest(BaseModel):
 
 
 @router.post(
-    "/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED
+    "/register",
+    response_model=AuthResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(auth_register_limiter)],
 )
 async def register_user(request: RegisterRequest, http_request: Request):
     try:
@@ -110,7 +117,11 @@ async def register_user(request: RegisterRequest, http_request: Request):
         )
 
 
-@router.post("/login", response_model=AuthResponse)
+@router.post(
+    "/login",
+    response_model=AuthResponse,
+    dependencies=[Depends(auth_login_limiter)],
+)
 async def login_user(request: LoginRequest, http_request: Request):
     try:
         logger.info(f"Login attempt for email: {request.email}")

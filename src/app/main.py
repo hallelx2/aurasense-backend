@@ -13,12 +13,13 @@ import uuid
 from datetime import datetime
 from contextlib import asynccontextmanager
 
+from src.agents.base import setup_checkpointer_indexes
+
 from .core.config import settings
 from .core.database import neo4j_db, redis_cache
 from .services.memory_service import memory_service
 from .api.routes import (
     voice_router,
-    onboarding_router,
     food_router,
     travel_router,
     social_router,
@@ -61,6 +62,8 @@ async def lifespan(app: FastAPI):
         await neo4j_db.connect()
         await redis_cache.connect()
         logger.info("Database connections established")
+        # Initialize LangGraph checkpointer indexes (idempotent).
+        await setup_checkpointer_indexes()
     except Exception as e:
         logger.error(f"Failed to establish database connections: {str(e)}", exc_info=True)
         raise
@@ -123,7 +126,6 @@ app.add_middleware(
 # Include API routes
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(voice_router, prefix=settings.API_V1_STR)
-app.include_router(onboarding_router, prefix=settings.API_V1_STR)
 app.include_router(food_router, prefix=settings.API_V1_STR)
 app.include_router(travel_router, prefix=settings.API_V1_STR)
 app.include_router(social_router, prefix=settings.API_V1_STR)
