@@ -49,6 +49,20 @@ _MODULES = [
     "src.app.services.social_service",
     "src.app.services.travel_service",
     "src.app.api.routes.users",
+    # Phase-4 additions:
+    "src.agents.food_agent",
+    "src.agents.food_agent.allergy_filter",
+    "src.agents.food_agent.schemas",
+    "src.agents.food_agent.state",
+    "src.agents.food_agent.nodes",
+    "src.agents.food_agent.graph",
+    "src.agents.food_agent.agent",
+    "src.agents.supervisor",
+    "src.agents.supervisor.state",
+    "src.agents.supervisor.intents",
+    "src.agents.supervisor.nodes",
+    "src.agents.supervisor.graph",
+    "src.app.api.routes.agent_ws",
 ]
 
 

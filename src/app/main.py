@@ -27,6 +27,7 @@ from .api.routes import (
     social_router,
     auth_router,
     onboarding_ws_router,
+    agent_ws_router,
     users_router,
 )
 
@@ -135,6 +136,7 @@ app.include_router(food_router, prefix=settings.API_V1_STR)
 app.include_router(travel_router, prefix=settings.API_V1_STR)
 app.include_router(social_router, prefix=settings.API_V1_STR)
 app.include_router(onboarding_ws_router, prefix=settings.API_V1_STR)
+app.include_router(agent_ws_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/")
