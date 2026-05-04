@@ -21,6 +21,15 @@ _MODULES = [
     "src.app.models.session",
     "src.app.models.user",
     "src.app.models.relationships",
+    # Phase-1 additions:
+    "src.app.services.llm_gateway",
+    "src.agents.base",
+    "src.agents.base.state",
+    "src.agents.base.agent",
+    "src.agents.base.checkpointer",
+    "src.agents.base.collaboration",
+    "src.agents.onboarding_agent.graph",
+    "src.agents.onboarding_agent.state",
 ]
 
 

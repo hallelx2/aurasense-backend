@@ -14,11 +14,12 @@ from rich.prompt import Prompt
 from rich.table import Table
 
 # Add the project root to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../"))
+# (file moved from src/agents/onboarding_agent/cli_test.py to scripts/ in Phase 1)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.agents.onboaring_agent.graph import run_onboarding_agent, continue_onboarding_conversation
-from src.agents.onboaring_agent.state import OnboardingAgentState
-from src.agents.onboaring_agent.nodes import ONBOARDING_REQUIRED_FIELDS
+from src.agents.onboarding_agent.graph import run_onboarding_agent, continue_onboarding_conversation
+from src.agents.onboarding_agent.state import OnboardingAgentState
+from src.agents.onboarding_agent.nodes import ONBOARDING_REQUIRED_FIELDS
 
 console = Console()
 

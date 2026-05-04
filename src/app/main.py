@@ -18,7 +18,6 @@ from .core.database import neo4j_db, redis_cache
 from .services.memory_service import memory_service
 from .api.routes import (
     voice_router,
-    onboarding_router,
     food_router,
     travel_router,
     social_router,
@@ -123,7 +122,6 @@ app.add_middleware(
 # Include API routes
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(voice_router, prefix=settings.API_V1_STR)
-app.include_router(onboarding_router, prefix=settings.API_V1_STR)
 app.include_router(food_router, prefix=settings.API_V1_STR)
 app.include_router(travel_router, prefix=settings.API_V1_STR)
 app.include_router(social_router, prefix=settings.API_V1_STR)

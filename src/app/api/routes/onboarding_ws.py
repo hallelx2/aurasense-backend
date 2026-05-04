@@ -12,11 +12,11 @@ from fastapi import (
     status,
 )
 
-from src.agents.onboaring_agent.graph import (
+from src.agents.onboarding_agent.graph import (
     continue_onboarding_conversation,
     run_onboarding_agent,
 )
-from src.agents.onboaring_agent.state import OnboardingAgentState
+from src.agents.onboarding_agent.state import OnboardingAgentState
 from src.app.api.routes.auth import security_manager
 from src.app.core.config import settings
 from src.app.models.user import User
