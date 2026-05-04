@@ -63,6 +63,17 @@ smoke-phase-2: ## Phase-2 acceptance: Graphiti SDK in-process + entity types + r
 	fi
 	@echo "✅ Phase-2 smoke passed."
 
+smoke-phase-4: ## Phase-4 acceptance: Food agent + supervisor + /ws/agent + REST CRUD
+	@echo "🧪 Phase-4 smoke: full unit suite (incl. allergy filter)..."
+	uv run pytest -q
+	@echo "🍽️  Verifying food agent + supervisor + mcp service compile cleanly..."
+	@uv run python -c "import os; os.environ.update({'ENVIRONMENT':'development','SECRET_KEY':'t','GROQ_API_KEY':'t','NEO4J_PASSWORD':'t','GEMINI_API_KEY':'t','REDIS_URL':'redis://localhost:6379'}); from src.agents.food_agent import food_agent, RecommendationList; from src.app.services.mcp_service import mcp_service; print('food agent name:', food_agent.name); print('schema fields:', list(RecommendationList.model_fields.keys())); print('mock catalog size:', len(__import__('src.app.services.mcp_service', fromlist=['_MOCK_CATALOG'])._MOCK_CATALOG))"
+	@echo "🛣️  Verifying /ws/agent + REST food routes registered..."
+	@uv run python -c "import os; os.environ.update({'ENVIRONMENT':'development','SECRET_KEY':'t','GROQ_API_KEY':'t','NEO4J_PASSWORD':'t','GEMINI_API_KEY':'t'}); from src.app.main import app; paths = [r.path for r in app.routes if hasattr(r, 'path')]; required = ['/api/v1/ws/agent', '/api/v1/food/restaurants', '/api/v1/food/restaurants/{restaurant_id}', '/api/v1/food/orders']; missing = [p for p in required if p not in paths]; assert not missing, f'missing routes: {missing}'; print('all phase-4 routes registered')"
+	@echo "🐳 Validating docker-compose syntax..."
+	docker compose config -q
+	@echo "✅ Phase-4 smoke passed."
+
 smoke-phase-3: ## Phase-3 acceptance: Profile agent + UserContextSnapshot + /users/me/context route
 	@echo "🧪 Phase-3 smoke: full unit suite..."
 	uv run pytest -q
