@@ -23,8 +23,8 @@ dev: ## Start development environment
 
 dev-local: ## Run backend locally (with Docker databases)
 	@echo "🚀 Starting databases only..."
-	docker compose up neo4j redis graphiti -d
-	@echo "🐍 Starting backend locally..."
+	docker compose up neo4j redis -d
+	@echo "🐍 Starting backend locally (Graphiti runs in-process)..."
 	uv run uvicorn src.app.main:app --reload --host 0.0.0.0 --port 8000
 
 build: ## Build Docker images

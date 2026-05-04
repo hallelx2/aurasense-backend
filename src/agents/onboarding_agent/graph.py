@@ -37,11 +37,23 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------
 
 
-def _compose_workflow(workflow: StateGraph) -> None:
-    """Register the onboarding nodes + edges on ``workflow``.
+def _compose_workflow(
+    workflow: StateGraph,
+    *,
+    set_entry: bool = True,
+    leaf_target: str = END,
+) -> None:
+    """Register the onboarding nodes + branching edges on ``workflow``.
 
-    Pulled out so :class:`OnboardingAgent` can reuse the wiring without
-    re-creating the StateGraph itself.
+    Args:
+        workflow: an empty StateGraph to populate.
+        set_entry: if True, sets ``transcription`` as the entry point.
+            Set to False when an outer wrapper (e.g. the BaseAgent
+            ``context`` step) wants to inject a node *before* transcription.
+        leaf_target: node name to route ``generate_response`` and
+            ``end_interaction`` into. Defaults to ``END``. The agent
+            class passes a ``record`` node here so every turn writes a
+            Graphiti episode before terminating.
     """
     workflow.add_node("transcription", transcription_node)
     workflow.add_node("info_extraction", information_extraction_node)
@@ -49,7 +61,9 @@ def _compose_workflow(workflow: StateGraph) -> None:
     workflow.add_node("generate_response", generate_response_node)
     workflow.add_node("end_interaction", end_interaction_node)
 
-    workflow.set_entry_point("transcription")
+    if set_entry:
+        workflow.set_entry_point("transcription")
+
     workflow.add_edge("transcription", "info_extraction")
 
     workflow.add_conditional_edges(
@@ -74,12 +88,12 @@ def _compose_workflow(workflow: StateGraph) -> None:
         },
     )
 
-    workflow.add_edge("generate_response", END)
-    workflow.add_edge("end_interaction", END)
+    workflow.add_edge("generate_response", leaf_target)
+    workflow.add_edge("end_interaction", leaf_target)
 
 
 def create_onboarding_agent_graph():
-    """Legacy in-memory graph factory (no checkpointer).
+    """Legacy in-memory graph factory (no checkpointer, no Graphiti).
 
     Kept for tests and ad-hoc scripts that want a stateless graph; the
     production WS path uses :class:`OnboardingAgent`'s checkpointed

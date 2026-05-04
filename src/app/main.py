@@ -14,6 +14,7 @@ from datetime import datetime
 from contextlib import asynccontextmanager
 
 from src.agents.base import setup_checkpointer_indexes
+from src.app.services.graphiti import close_graphiti, setup_graphiti
 
 from .core.config import settings
 from .core.database import neo4j_db, redis_cache
@@ -64,8 +65,13 @@ async def lifespan(app: FastAPI):
         logger.info("Database connections established")
         # Initialize LangGraph checkpointer indexes (idempotent).
         await setup_checkpointer_indexes()
+        # Initialize Graphiti (build indices/constraints, idempotent).
+        # Graphiti now runs in-process via graphiti-core, not as a
+        # standalone container — see services/graphiti/client.py.
+        await setup_graphiti()
+        logger.info("Graphiti SDK indices/constraints ready")
     except Exception as e:
-        logger.error(f"Failed to establish database connections: {str(e)}", exc_info=True)
+        logger.error(f"Failed during startup: {str(e)}", exc_info=True)
         raise
 
     yield
@@ -75,6 +81,7 @@ async def lifespan(app: FastAPI):
     try:
         await neo4j_db.close()
         await redis_cache.close()
+        await close_graphiti()
         await memory_service.cleanup()
         logger.info("All connections closed")
     except Exception as e:

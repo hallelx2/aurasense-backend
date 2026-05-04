@@ -1,148 +1,186 @@
 """
-Graphiti Client Implementation
+Graphiti client facade.
+
+Wraps `graphiti_core.Graphiti` as a process-singleton so every agent and
+service uses the same instance (one Neo4j connection pool, one LLM
+client, one embedder). The standalone `zepai/graphiti` Docker container
+is no longer used; Graphiti runs inside the FastAPI process.
+
+LLM + embedder choice is driven by settings:
+  - GRAPHITI_LLM_PROVIDER  (gemini | openai | groq)
+  - GRAPHITI_LLM_MODEL
+  - GRAPHITI_EMBEDDER_PROVIDER  (gemini | openai)
+  - GRAPHITI_EMBEDDER_MODEL
+  - GRAPHITI_EMBEDDER_DIM
+
+Groq has no embeddings endpoint, so `GRAPHITI_EMBEDDER_PROVIDER=groq` is
+rejected at construction. The validator surfaces the problem at boot
+(via the lifespan hook) rather than at first episode write.
+
+Public API used by the rest of the codebase lives in `contract.py`
+(writes) and `retriever.py` (reads). Direct callers of `get_graphiti()`
+should be rare and limited to admin / migration scripts.
 """
 
-import aiohttp
-import json
-from typing import Dict, Any, List, Optional
+from __future__ import annotations
+
 import logging
+from functools import lru_cache
+from typing import Optional
+
+from graphiti_core import Graphiti
+from graphiti_core.embedder import OpenAIEmbedder
+from graphiti_core.embedder.openai import OpenAIEmbedderConfig
+from graphiti_core.llm_client import LLMConfig, OpenAIClient
+
+from src.app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-class Client:
+
+_VALID_LLM_PROVIDERS = {"gemini", "openai", "groq"}
+_VALID_EMBEDDER_PROVIDERS = {"gemini", "openai"}  # groq has no embeddings
+
+
+# ---------------------------------------------------------------- Builders
+
+
+def _build_llm_client() -> OpenAIClient:
+    """Build the `OpenAIClient` Graphiti will use for entity extraction.
+
+    All three supported providers (gemini, openai, groq) speak
+    OpenAI-compatible chat completions, so we always use `OpenAIClient`
+    and just swap `base_url` + `api_key` accordingly.
     """
-    Graphiti Memory Service Client
+    provider = settings.GRAPHITI_LLM_PROVIDER.lower()
+    if provider not in _VALID_LLM_PROVIDERS:
+        raise ValueError(
+            f"GRAPHITI_LLM_PROVIDER={provider!r} is invalid; "
+            f"choose one of {sorted(_VALID_LLM_PROVIDERS)}"
+        )
 
-    Handles communication with the Graphiti memory service for storing and retrieving memories.
+    api_key, base_url = _llm_credentials_for(provider)
+    if not api_key:
+        raise RuntimeError(
+            f"GRAPHITI_LLM_PROVIDER={provider!r} but the matching API key "
+            f"is empty (see settings)."
+        )
+
+    config = LLMConfig(
+        api_key=api_key,
+        model=settings.GRAPHITI_LLM_MODEL,
+        base_url=base_url,
+        # graphiti-core defaults are sane; we only override max_tokens to
+        # keep extraction passes from blowing the context budget.
+        max_tokens=8192,
+    )
+    return OpenAIClient(config=config)
+
+
+def _build_embedder() -> OpenAIEmbedder:
+    """Build the `OpenAIEmbedder` Graphiti will use for semantic search."""
+    provider = settings.GRAPHITI_EMBEDDER_PROVIDER.lower()
+    if provider not in _VALID_EMBEDDER_PROVIDERS:
+        raise ValueError(
+            f"GRAPHITI_EMBEDDER_PROVIDER={provider!r} is invalid; "
+            f"groq has no embeddings endpoint. Choose one of "
+            f"{sorted(_VALID_EMBEDDER_PROVIDERS)}"
+        )
+
+    api_key, base_url = _embedder_credentials_for(provider)
+    if not api_key:
+        raise RuntimeError(
+            f"GRAPHITI_EMBEDDER_PROVIDER={provider!r} but the matching API "
+            f"key is empty."
+        )
+
+    config = OpenAIEmbedderConfig(
+        api_key=api_key,
+        embedding_model=settings.GRAPHITI_EMBEDDER_MODEL,
+        embedding_dim=settings.GRAPHITI_EMBEDDER_DIM,
+        base_url=base_url,
+    )
+    return OpenAIEmbedder(config=config)
+
+
+def _llm_credentials_for(provider: str) -> tuple[str, Optional[str]]:
+    """Return (api_key, base_url) for the LLM side."""
+    if provider == "gemini":
+        return settings.GEMINI_API_KEY, settings.GEMINI_BASE_URL
+    if provider == "openai":
+        return settings.OPENAI_API_KEY, None  # SDK default api.openai.com/v1
+    if provider == "groq":
+        return settings.GROQ_API_KEY, "https://api.groq.com/openai/v1"
+    raise AssertionError("unreachable")  # _VALID_LLM_PROVIDERS guards this
+
+
+def _embedder_credentials_for(provider: str) -> tuple[str, Optional[str]]:
+    """Return (api_key, base_url) for the embedder side."""
+    if provider == "gemini":
+        return settings.GEMINI_API_KEY, settings.GEMINI_BASE_URL
+    if provider == "openai":
+        return settings.OPENAI_API_KEY, None
+    raise AssertionError("unreachable")
+
+
+# -------------------------------------------------------- Singleton accessor
+
+
+@lru_cache(maxsize=1)
+def get_graphiti() -> Graphiti:
+    """Return the process-shared `Graphiti` instance.
+
+    Construction is lazy + cached. Call `setup_graphiti()` once at app
+    startup so indices/constraints are created before any episode writes
+    or searches run.
     """
+    llm_client = _build_llm_client()
+    embedder = _build_embedder()
+    g = Graphiti(
+        uri=settings.NEO4J_URI,
+        user=settings.NEO4J_USER,
+        password=settings.NEO4J_PASSWORD,
+        llm_client=llm_client,
+        embedder=embedder,
+    )
+    logger.info(
+        "Graphiti SDK initialized: llm=%s:%s embedder=%s:%s (dim=%d)",
+        settings.GRAPHITI_LLM_PROVIDER,
+        settings.GRAPHITI_LLM_MODEL,
+        settings.GRAPHITI_EMBEDDER_PROVIDER,
+        settings.GRAPHITI_EMBEDDER_MODEL,
+        settings.GRAPHITI_EMBEDDER_DIM,
+    )
+    return g
 
-    def __init__(self, host: str = "localhost:8080"):
-        """
-        Initialize the Graphiti client
 
-        Args:
-            host: The host address of the Graphiti service (default: "localhost:8080")
-        """
-        self.base_url = f"http://{host}"
-        self.logger = logging.getLogger("graphiti.client")
-        self.session = None
+async def setup_graphiti() -> None:
+    """One-time index + constraint setup. Idempotent."""
+    g = get_graphiti()
+    await g.build_indices_and_constraints()
+    logger.info("Graphiti indices + constraints built")
 
-    async def _ensure_session(self):
-        """Ensure an aiohttp session exists"""
-        if not self.session:
-            self.session = aiohttp.ClientSession()
 
-    async def close(self):
-        """Close the client session"""
-        if self.session:
-            await self.session.close()
-            self.session = None
+async def close_graphiti() -> None:
+    """Close the underlying Neo4j driver (called from FastAPI lifespan shutdown)."""
+    if get_graphiti.cache_info().currsize == 0:
+        return
+    g = get_graphiti()
+    try:
+        await g.close()
+    except Exception:
+        logger.exception("Error closing Graphiti client")
+    finally:
+        get_graphiti.cache_clear()
 
-    async def add_memory(self, data: str, context: Dict[str, Any]) -> bool:
-        """
-        Add a new memory
 
-        Args:
-            data: The memory content
-            context: Additional context for the memory
+def reset_graphiti_cache() -> None:
+    """Drop the cached singleton (used in tests that swap settings)."""
+    get_graphiti.cache_clear()
 
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            await self._ensure_session()
 
-            payload = {
-                "content": data,
-                "metadata": context
-            }
+# ------------------------------------------------- Backward-compat aliases
 
-            async with self.session.post(
-                f"{self.base_url}/memories",
-                json=payload
-            ) as response:
-                if response.status == 201:
-                    self.logger.info("Memory added successfully")
-                    return True
-                else:
-                    self.logger.error(f"Failed to add memory: {response.status}")
-                    return False
-
-        except Exception as e:
-            self.logger.error(f"Error adding memory: {e}")
-            return False
-
-    async def search(
-        self,
-        query: str,
-        context: Optional[Dict[str, Any]] = None,
-        limit: int = 10
-    ) -> List[Dict[str, Any]]:
-        """
-        Search memories
-
-        Args:
-            query: Search query string
-            context: Optional context to filter memories
-            limit: Maximum number of results to return
-
-        Returns:
-            List of matching memories
-        """
-        try:
-            await self._ensure_session()
-
-            params = {
-                "q": query,
-                "limit": limit
-            }
-
-            if context:
-                params["context"] = json.dumps(context)
-
-            async with self.session.get(
-                f"{self.base_url}/memories/search",
-                params=params
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    self.logger.info(f"Retrieved {len(data)} memories")
-                    return data
-                else:
-                    self.logger.error(f"Failed to search memories: {response.status}")
-                    return []
-
-        except Exception as e:
-            self.logger.error(f"Error searching memories: {e}")
-            return []
-
-    async def get_memory(self, memory_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Get a specific memory by ID
-
-        Args:
-            memory_id: The ID of the memory to retrieve
-
-        Returns:
-            The memory data if found, None otherwise
-        """
-        try:
-            await self._ensure_session()
-
-            async with self.session.get(
-                f"{self.base_url}/memories/{memory_id}"
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    self.logger.info(f"Retrieved memory {memory_id}")
-                    return data
-                elif response.status == 404:
-                    self.logger.warning(f"Memory {memory_id} not found")
-                    return None
-                else:
-                    self.logger.error(f"Failed to get memory: {response.status}")
-                    return None
-
-        except Exception as e:
-            self.logger.error(f"Error getting memory: {e}")
-            return None
+# The old `Client` class is gone, but `services.graphiti.__init__` may
+# still re-export it. We expose `get_graphiti()` as the canonical entry.
+Client = None  # type: ignore[assignment]  # explicit "removed"

@@ -1,135 +1,139 @@
-from typing import Dict, Any, List, Optional
+"""
+Back-compat shim for the legacy ``memory_service`` import sites.
+
+The real Graphiti integration now lives in
+:mod:`src.app.services.graphiti.contract` (writes) and
+:mod:`src.app.services.graphiti.retriever` (reads). This module exists
+only so existing call sites in :mod:`src.app.api.routes.auth` (and any
+yet-to-be-migrated services) keep working without touching them in this
+phase.
+
+New code should import from ``services.graphiti.contract`` /
+``services.graphiti.retriever`` directly. This module will be deleted
+once the auth route migration lands.
+"""
+
+from __future__ import annotations
+
 import logging
-from src.app.services.graphiti import Client
-from src.app.core.config import settings
+from typing import Any, Dict, List, Optional
+
 from src.app.models.user import User
+
+from .graphiti import contract, retriever
 
 logger = logging.getLogger(__name__)
 
 
 class MemoryService:
-    def __init__(self):
+    """Thin pass-through over the Graphiti contract module."""
+
+    def __init__(self) -> None:
         self.logger = logging.getLogger("memory_service")
-        self.graphiti_client = None
-        self.initialize_graphiti()
 
-    def initialize_graphiti(self):
+    async def cleanup(self) -> None:
+        """No-op: the Graphiti SDK lifecycle is owned by ``services.graphiti.client``."""
+        from .graphiti.client import close_graphiti
+
+        await close_graphiti()
+
+    # ------------------------------------------------------------- Writes
+
+    async def store_user_memory(
+        self, user_id: str, memory_data: Dict[str, Any]
+    ) -> bool:
+        """Generic write — used by callers that pass ad-hoc payloads."""
+        metadata = memory_data.get("metadata", {}) if memory_data else {}
+        event_type = metadata.get("event_type", "user_event")
         try:
-            graphiti_host = getattr(settings, 'GRAPHITI_HOST', 'localhost')
-            graphiti_port = getattr(settings, 'GRAPHITI_PORT', 8080)
-
-            self.graphiti_client = Client(host=f"{graphiti_host}:{graphiti_port}")
-            self.logger.info(f"Graphiti memory service initialized at {graphiti_host}:{graphiti_port}")
-        except Exception as e:
-            self.logger.error(f"Failed to initialize Graphiti: {e}")
-            self.graphiti_client = None
-
-    async def cleanup(self):
-        """Cleanup resources"""
-        if self.graphiti_client:
-            await self.graphiti_client.close()
-            self.graphiti_client = None
-
-    async def store_user_memory(self, user_id: str, memory_data: Dict[str, Any]) -> bool:
-        if not self.graphiti_client:
-            self.logger.warning("Graphiti not initialized, skipping memory storage")
-            return False
-
-        try:
-            await self.graphiti_client.add_memory(
-                data=memory_data.get("content", ""),
-                context={"user_id": user_id, **memory_data.get("metadata", {})}
+            await contract.record_user_event(
+                user_id=user_id,
+                event_type=event_type,
+                payload={
+                    "content": memory_data.get("content"),
+                    **metadata,
+                },
             )
-            self.logger.info(f"Memory stored for user {user_id}")
             return True
-        except Exception as e:
-            self.logger.error(f"Failed to store memory for user {user_id}: {e}")
+        except Exception:
+            self.logger.exception("store_user_memory failed for user_id=%s", user_id)
             return False
-
-    async def retrieve_user_memories(self, user_id: str, query: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
-        if not self.graphiti_client:
-            self.logger.warning("Graphiti not initialized, returning empty memories")
-            return []
-
-        try:
-            if query:
-                memories = await self.graphiti_client.search(
-                    query=query,
-                    context={"user_id": user_id},
-                    limit=limit
-                )
-            else:
-                memories = []
-
-            self.logger.info(f"Retrieved {len(memories)} memories for user {user_id}")
-            return memories
-        except Exception as e:
-            self.logger.error(f"Failed to retrieve memories for user {user_id}: {e}")
-            return []
 
     async def store_user_registration(self, user: User) -> bool:
-        memory_data = {
-            "content": f"User {user.first_name} {user.last_name} registered with email {user.email}",
-            "metadata": {
-                "event_type": "user_registration",
-                "user_id": user.uid,
-                "email": user.email,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "username": user.username,
-                "registration_date": user.created_at.isoformat() if user.created_at else None
-            }
-        }
-
-        return await self.store_user_memory(user.uid, memory_data)
+        try:
+            await contract.record_user_event(
+                user_id=user.uid,
+                event_type="user_registration",
+                payload={
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "username": getattr(user, "username", None),
+                    "registration_date": (
+                        user.created_at.isoformat() if user.created_at else None
+                    ),
+                },
+                agent_name="auth",
+            )
+            return True
+        except Exception:
+            self.logger.exception("store_user_registration failed for %s", user.uid)
+            return False
 
     async def store_user_login(self, user: User) -> bool:
-        memory_data = {
-            "content": f"User {user.first_name} {user.last_name} logged in",
-            "metadata": {
-                "event_type": "user_login",
-                "user_id": user.uid,
-                "email": user.email,
-                "login_timestamp": user.last_active.isoformat() if user.last_active else None
-            }
-        }
-
-        return await self.store_user_memory(user.uid, memory_data)
+        try:
+            await contract.record_user_event(
+                user_id=user.uid,
+                event_type="user_login",
+                payload={
+                    "email": user.email,
+                    "login_timestamp": (
+                        user.last_active.isoformat() if user.last_active else None
+                    ),
+                },
+                agent_name="auth",
+            )
+            return True
+        except Exception:
+            self.logger.exception("store_user_login failed for %s", user.uid)
+            return False
 
     async def store_user_logout(self, user_id: str) -> bool:
-        memory_data = {
-            "content": f"User {user_id} logged out",
-            "metadata": {
-                "event_type": "user_logout",
-                "user_id": user_id,
-                "logout_timestamp": None
-            }
-        }
+        try:
+            await contract.record_user_event(
+                user_id=user_id,
+                event_type="user_logout",
+                payload={},
+                agent_name="auth",
+            )
+            return True
+        except Exception:
+            self.logger.exception("store_user_logout failed for %s", user_id)
+            return False
 
-        return await self.store_user_memory(user_id, memory_data)
+    # -------------------------------------------------------------- Reads
+
+    async def retrieve_user_memories(
+        self,
+        user_id: str,
+        query: Optional[str] = None,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Backwards-compatible read. New code should call retriever directly."""
+        bundle = await retriever.get_relevant_context(
+            user_id=user_id,
+            query=query or "user profile",
+            num_results=limit,
+        )
+        return [{"fact": f} for f in bundle.facts]
 
     async def get_user_context(self, user_id: str) -> Dict[str, Any]:
-        memories = await self.retrieve_user_memories(user_id, limit=20)
-
-        context = {
-            "user_id": user_id,
-            "recent_activities": [],
-            "preferences": {},
-            "historical_data": memories
-        }
-
-        for memory in memories:
-            metadata = memory.get("metadata", {})
-            event_type = metadata.get("event_type")
-
-            if event_type in ["user_login", "user_logout", "user_registration"]:
-                context["recent_activities"].append({
-                    "type": event_type,
-                    "timestamp": metadata.get("timestamp"),
-                    "content": memory.get("content")
-                })
-
-        return context
+        bundle = await retriever.get_relevant_context(
+            user_id=user_id,
+            query="recent activity preferences profile",
+            intent="profile",
+        )
+        return bundle.to_dict()
 
 
 memory_service = MemoryService()

@@ -8,10 +8,18 @@ import pytest
 
 
 def _fresh_settings_module():
-    """Re-import config so monkeypatched env vars are picked up."""
-    import src.app.core.config as config_mod
+    """Re-import config so monkeypatched env vars are picked up.
 
-    return importlib.reload(config_mod)
+    Also reloads `llm_gateway`, otherwise its `from .config import settings`
+    binding still points at the previous (stale) Settings instance and
+    role profile lookups read the wrong env.
+    """
+    import src.app.core.config as config_mod
+    import src.app.services.llm_gateway as gw_mod
+
+    importlib.reload(config_mod)
+    importlib.reload(gw_mod)
+    return config_mod
 
 
 def test_default_role_falls_back_to_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -119,12 +127,44 @@ def test_groq_role_builds(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_openai_role_builds(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ENVIRONMENT", "development")
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
-    monkeypatch.setenv("LLM_PROFILE_GRAPHITI", "openai:gpt-4o-mini")
+    monkeypatch.setenv("LLM_PROFILE_AGENT", "openai:gpt-4o-mini")
 
     _fresh_settings_module()
     from src.app.services.llm_gateway import LLMGateway
 
-    llm = LLMGateway().get_llm("graphiti")
+    llm = LLMGateway().get_llm("agent")
     from langchain_core.language_models import BaseChatModel
 
     assert isinstance(llm, BaseChatModel)
+
+
+def test_gemini_role_builds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gemini speaks OpenAI-compatible at GEMINI_BASE_URL — gateway handles it."""
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+    monkeypatch.setenv("LLM_PROFILE_FOOD", "gemini:gemini-2.0-flash")
+
+    _fresh_settings_module()
+    from src.app.services.llm_gateway import LLMGateway
+
+    llm = LLMGateway().get_llm("food")
+    from langchain_core.language_models import BaseChatModel
+    from langchain_openai import ChatOpenAI
+
+    assert isinstance(llm, BaseChatModel)
+    # Specifically a ChatOpenAI under the hood — confirms the OpenAI-compat path.
+    assert isinstance(llm, ChatOpenAI)
+
+
+def test_gemini_typo_refused_at_boot(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`gemni:` (missing 'i') must surface as a startup error."""
+    from src.app.core.config import Settings
+
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("LLM_PROFILE_AGENT", "gemni:gemini-2.0-flash")
+
+    with pytest.raises(Exception) as exc:
+        Settings()
+
+    assert "gemni" in str(exc.value)
+    assert "unknown provider" in str(exc.value)

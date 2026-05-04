@@ -95,6 +95,17 @@ class LLMGateway:
                 base_url="https://openrouter.ai/api/v1",
             )
 
+        if provider == "gemini":
+            # Google's Gemini speaks OpenAI-compatible at GEMINI_BASE_URL.
+            # Pass GEMINI_API_KEY as the bearer key.
+            from langchain_openai import ChatOpenAI
+
+            return ChatOpenAI(
+                model=model,
+                api_key=settings.GEMINI_API_KEY,
+                base_url=settings.GEMINI_BASE_URL,
+            )
+
         raise ValueError(
             f"LLM gateway: unknown provider {provider!r} for role {role!r}. "
             f"Known: {sorted(settings.LLM_KNOWN_PROVIDERS)}"
