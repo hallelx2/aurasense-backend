@@ -92,6 +92,25 @@ class Settings(BaseSettings):
     GRAPHITI_PORT: int = 8080
     GRAPHITI_URL: str = "http://localhost:8080"
 
+    # -------------------------------------------------------- LLM gateway
+    # Every agent / service obtains its model via the LLM gateway, which
+    # resolves a role (e.g. "food", "supervisor", "graphiti") to a profile
+    # string of the form "provider:model". A role with an empty / unset
+    # profile falls back to LLM_PROFILE_DEFAULT.
+    LLM_PROFILE_DEFAULT: str = "groq:llama-3.3-70b-versatile"
+
+    # Per-role overrides. Add new roles by registering them in
+    # `LLM_ROLES` below; pydantic-settings will pick up the env var
+    # `LLM_PROFILE_<UPPER_ROLE>` automatically.
+    LLM_PROFILE_AGENT: str = ""
+    LLM_PROFILE_SUPERVISOR: str = ""
+    LLM_PROFILE_GRAPHITI: str = "openai:gpt-4o-mini"
+    LLM_PROFILE_ONBOARDING: str = ""
+    LLM_PROFILE_FOOD: str = ""
+    LLM_PROFILE_PROFILE: str = ""
+    LLM_PROFILE_TRAVEL: str = ""
+    LLM_PROFILE_SOCIAL: str = ""
+
     # ----------------------------------------------------- Computed views
 
     @property
@@ -105,6 +124,38 @@ class Settings(BaseSettings):
             f"bolt://{self.NEO4J_USER}:{self.NEO4J_PASSWORD}"
             f"@{self.NEO4J_HOST}:{self.NEO4J_PORT}"
         )
+
+    # -------------------------------------------------- LLM role registry
+
+    #: Canonical set of LLM roles known to the gateway. Adding a role here
+    #: gives it an env-var override (`LLM_PROFILE_<UPPER>`); omitting it
+    #: simply means the gateway will fall back to `LLM_PROFILE_DEFAULT`.
+    LLM_ROLES: tuple[str, ...] = (
+        "agent",
+        "supervisor",
+        "graphiti",
+        "onboarding",
+        "food",
+        "profile",
+        "travel",
+        "social",
+    )
+
+    #: Providers the gateway knows how to instantiate. Keep in sync with
+    #: `src/app/services/llm_gateway.py::LLMGateway._build`.
+    LLM_KNOWN_PROVIDERS: frozenset[str] = frozenset(
+        {"groq", "openai", "ollama", "openrouter"}
+    )
+
+    def llm_profile_for(self, role: str) -> str:
+        """Resolve a role to its `provider:model` profile string.
+
+        Falls back to `LLM_PROFILE_DEFAULT` if the role-specific override
+        is empty / unset. Unknown roles also fall back to default.
+        """
+        attr = f"LLM_PROFILE_{role.upper()}"
+        spec = getattr(self, attr, "") or self.LLM_PROFILE_DEFAULT
+        return spec
 
     # --------------------------------------------------------- Validators
 
@@ -120,6 +171,46 @@ class Settings(BaseSettings):
     def _compute_neo4j_uri(self) -> "Settings":
         if not self.NEO4J_URI:
             self.NEO4J_URI = f"bolt://{self.NEO4J_HOST}:{self.NEO4J_PORT}"
+        return self
+
+    @model_validator(mode="after")
+    def _validate_llm_profiles(self) -> "Settings":
+        """Catch typos like `grok:llama-3` (vs `groq:`) at boot, not at first
+        request. Validates only the *format* — actual model availability is
+        validated lazily by the gateway when a role is first requested.
+        """
+        problems: list[str] = []
+
+        def _check(name: str, spec: str) -> None:
+            if not spec:
+                return
+            if ":" not in spec:
+                problems.append(
+                    f"{name}={spec!r} must be of the form 'provider:model'"
+                )
+                return
+            provider, _, model = spec.partition(":")
+            if not provider or not model:
+                problems.append(
+                    f"{name}={spec!r} must be 'provider:model' with both halves"
+                )
+                return
+            if provider not in self.LLM_KNOWN_PROVIDERS:
+                problems.append(
+                    f"{name}={spec!r}: unknown provider {provider!r}; "
+                    f"known: {sorted(self.LLM_KNOWN_PROVIDERS)}"
+                )
+
+        _check("LLM_PROFILE_DEFAULT", self.LLM_PROFILE_DEFAULT)
+        for role in self.LLM_ROLES:
+            attr = f"LLM_PROFILE_{role.upper()}"
+            _check(attr, getattr(self, attr, ""))
+
+        if problems:
+            joined = "\n  - ".join(problems)
+            raise RuntimeError(
+                "Refusing to boot with invalid LLM profile config:\n  - " + joined
+            )
         return self
 
     @model_validator(mode="after")
