@@ -30,6 +30,15 @@ _MODULES = [
     "src.agents.base.collaboration",
     "src.agents.onboarding_agent.graph",
     "src.agents.onboarding_agent.state",
+    # Phase-2 additions:
+    "src.app.services.graphiti",
+    "src.app.services.graphiti.client",
+    "src.app.services.graphiti.contract",
+    "src.app.services.graphiti.retriever",
+    "src.app.services.graphiti.entity_types",
+    "src.agents.onboarding_agent.agent",
+    # Phase-1.5 polish:
+    "src.app.core.logging",
 ]
 
 

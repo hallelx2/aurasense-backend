@@ -25,6 +25,7 @@ from typing import Any, Generic, Optional, Type, TypeVar
 from langchain_core.language_models import BaseChatModel
 from langgraph.graph import StateGraph
 
+from src.app.services.graphiti import contract, retriever
 from src.app.services.llm_gateway import gateway
 
 from .checkpointer import get_async_redis_saver
@@ -90,43 +91,48 @@ class BaseAgent(ABC, Generic[S]):
     # -- Default reusable nodes -------------------------------------------
 
     async def context_node(self, state: S) -> S:
-        """Default: pull relevant Graphiti context for this agent's intent.
+        """Pull relevant Graphiti context for this agent's intent.
 
-        Overridden when the specialist needs different filtering. The real
-        Graphiti retriever lands in Phase 2; this is a no-op shim for now
-        so subclasses can wire ``context_node`` into their graphs and have
-        it Just Work later without re-plumbing.
+        Stores the result as a JSON-serializable dict in
+        ``state["retrieved_context"]`` (RedisSaver round-trip safe). Nodes
+        that want the rich :class:`ContextBundle` should call
+        :func:`retriever.get_relevant_context` directly.
+
+        On Graphiti error this is a no-op — the user-facing flow always
+        proceeds, even when memory is unavailable.
         """
-        try:
-            from src.app.services.graphiti.retriever import get_relevant_context
-        except ImportError:
-            # Phase-2 module not yet present — skip.
+        user_id = state.get("user_id", "")
+        if not user_id:
             state.setdefault("retrieved_context", {})
             return state
 
-        state["retrieved_context"] = await get_relevant_context(
-            user_id=state.get("user_id", ""),
-            query=state.get("transcribed_text") or state.get("user_input", "") or "",
-            kinds=self.relevant_entity_types,
+        query = (
+            state.get("transcribed_text")
+            or state.get("user_input")
+            or "user profile preferences"
         )
+        bundle = await retriever.get_relevant_context(
+            user_id=user_id,
+            query=query if isinstance(query, str) else str(query),
+            kinds=self.relevant_entity_types or None,
+            intent=self.name,
+        )
+        state["retrieved_context"] = bundle.to_dict()
         return state
 
     async def record_node(self, state: S) -> S:
-        """Default: write any extracted_facts as a Graphiti episode.
+        """Write any ``extracted_facts`` as a Graphiti episode.
 
-        Same Phase-2 shim as ``context_node``: no-op until the contract
-        module exists, fully wired afterwards.
+        Specialists that want richer episode types (utterances,
+        recommendations, visits) should call into :mod:`contract`
+        directly from their nodes.
         """
         facts = state.get("extracted_facts") or {}
-        if not facts:
+        user_id = state.get("user_id")
+        if not facts or not user_id:
             return state
-        try:
-            from src.app.services.graphiti.contract import record_extracted_facts
-        except ImportError:
-            return state
-
-        await record_extracted_facts(
-            user_id=state.get("user_id", ""),
+        await contract.record_extracted_facts(
+            user_id=user_id,
             facts=facts,
             agent_name=self.name,
         )

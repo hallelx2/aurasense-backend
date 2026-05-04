@@ -23,8 +23,8 @@ dev: ## Start development environment
 
 dev-local: ## Run backend locally (with Docker databases)
 	@echo "🚀 Starting databases only..."
-	docker compose up neo4j redis graphiti -d
-	@echo "🐍 Starting backend locally..."
+	docker compose up neo4j redis -d
+	@echo "🐍 Starting backend locally (Graphiti runs in-process)..."
 	uv run uvicorn src.app.main:app --reload --host 0.0.0.0 --port 8000
 
 build: ## Build Docker images
@@ -50,6 +50,18 @@ smoke-phase-1: ## Phase-1 acceptance: foundation + onboarding-on-BaseAgent
 	@echo "🐳 Validating docker-compose syntax..."
 	docker compose config -q
 	@echo "✅ Phase-1 smoke passed."
+
+smoke-phase-2: ## Phase-2 acceptance: Graphiti SDK in-process + entity types + read/write contract
+	@echo "🧪 Phase-2 smoke: full unit suite + Graphiti SDK construction..."
+	uv run pytest -q
+	@echo "🧠 Verifying Graphiti client + onboarding agent compile cleanly..."
+	@uv run python -c "import os; os.environ.update({'ENVIRONMENT':'development','SECRET_KEY':'t','GROQ_API_KEY':'t','NEO4J_PASSWORD':'t','GEMINI_API_KEY':'t','REDIS_URL':'redis://localhost:6379'}); from src.app.services.graphiti import get_graphiti, ENTITY_TYPES; from src.agents.onboarding_agent.agent import onboarding_agent; print('graphiti backed by:', type(get_graphiti().llm_client).__name__); print('entity types registered:', len(ENTITY_TYPES))"
+	@echo "🐳 Validating docker-compose syntax (graphiti container should be GONE)..."
+	docker compose config -q
+	@if docker compose config 2>/dev/null | grep -q 'image: zepai/graphiti'; then \
+		echo "❌ standalone zepai/graphiti container still in compose"; exit 1; \
+	fi
+	@echo "✅ Phase-2 smoke passed."
 
 deploy: ## Deploy to production server
 	@echo "🚀 Deploying to $(ENV) environment..."

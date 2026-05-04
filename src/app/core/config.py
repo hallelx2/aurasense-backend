@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
     OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
+    # Gemini speaks OpenAI-compatible at this base URL; pass GEMINI_API_KEY
+    # in the Authorization header just like a normal OpenAI key.
+    GEMINI_API_KEY: str = ""
+    GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
     # -------------------------------------------------------- Cloud storage
     CLOUD_STORAGE_PROVIDER: str = "aws"
@@ -88,9 +92,28 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # ----------------------------------------------------------- Graphiti
+    # NOTE (Phase 2): the standalone `zepai/graphiti` Docker container is
+    # gone. Graphiti now runs in-process via `graphiti-core` and writes
+    # directly to the same Neo4j database as the rest of the app.
+    # GRAPHITI_HOST/PORT/URL are retained as deprecated no-ops in case
+    # anything still imports them; nothing in the code path uses them.
     GRAPHITI_HOST: str = "localhost"
     GRAPHITI_PORT: int = 8080
     GRAPHITI_URL: str = "http://localhost:8080"
+
+    # In-process Graphiti config — pick the LLM + embedder Graphiti will
+    # use for episode entity extraction and semantic search. Defaults are
+    # Gemini (single-key, free tier) because we have a Gemini key handy
+    # and OpenAI's pricing is not free.
+    #
+    # Provider must be one of: "gemini", "openai", "groq" (LLM only — Groq
+    # has no embeddings; the embedder must be a different provider).
+    GRAPHITI_LLM_PROVIDER: str = "gemini"
+    GRAPHITI_LLM_MODEL: str = "gemini-2.0-flash"
+
+    GRAPHITI_EMBEDDER_PROVIDER: str = "gemini"
+    GRAPHITI_EMBEDDER_MODEL: str = "text-embedding-004"
+    GRAPHITI_EMBEDDER_DIM: int = 768  # 768 for Gemini, 1536 for OpenAI text-embedding-3-small
 
     # -------------------------------------------------------- LLM gateway
     # Every agent / service obtains its model via the LLM gateway, which
@@ -102,9 +125,13 @@ class Settings(BaseSettings):
     # Per-role overrides. Add new roles by registering them in
     # `LLM_ROLES` below; pydantic-settings will pick up the env var
     # `LLM_PROFILE_<UPPER_ROLE>` automatically.
+    #
+    # NOTE: Graphiti's LLM is configured separately via
+    # GRAPHITI_LLM_PROVIDER / GRAPHITI_LLM_MODEL — graphiti-core needs an
+    # OpenAI-style client object, not a LangChain BaseChatModel, so it
+    # doesn't go through the gateway.
     LLM_PROFILE_AGENT: str = ""
     LLM_PROFILE_SUPERVISOR: str = ""
-    LLM_PROFILE_GRAPHITI: str = "openai:gpt-4o-mini"
     LLM_PROFILE_ONBOARDING: str = ""
     LLM_PROFILE_FOOD: str = ""
     LLM_PROFILE_PROFILE: str = ""
@@ -144,7 +171,7 @@ class Settings(BaseSettings):
     #: Providers the gateway knows how to instantiate. Keep in sync with
     #: `src/app/services/llm_gateway.py::LLMGateway._build`.
     LLM_KNOWN_PROVIDERS: frozenset[str] = frozenset(
-        {"groq", "openai", "ollama", "openrouter"}
+        {"groq", "openai", "ollama", "openrouter", "gemini"}
     )
 
     def llm_profile_for(self, role: str) -> str:
